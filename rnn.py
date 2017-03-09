@@ -14,17 +14,17 @@ class Config(object):
     """
     n_features = 36
     n_classes = 3
-    dropout = 0.5
-    embed_size = 50
-    hidden_size = 200
-    batch_size = 2048
+ #   dropout = 0.5
+    embed_size = 200 # 200-d word vectors
+    hidden_size = 200 # might change this
+    batch_size = 2048 # might change this
     n_epochs = 10
     lr = 0.001
-    max_sentence_len = 10
+    max_sentence_len = 10 # will need to implement some kind of max summary length
 
 class RNN(object):
 	def add_placeholders(self):
-		self.inputs_placeholder = tf.placeholder(tf.float32, shape=([None, max_sentence_len, 1]), name="x")
+		self.inputs_placeholder = tf.placeholder(tf.float32, shape=([None, max_sentence_len, 1]), name="x") # none so that that dimension will be batch size
         
         ######### DOUBLE CHECK SIZE OF LABELS PLACEHOLDER ###############
         self.labels_placeholder = tf.placeholder(tf.float32, shape=([None, 1]), name="y")
@@ -74,3 +74,9 @@ class RNN(object):
 
     	outputs, output_state_fw, output_state_bw = tf.contrib.rnn.static_bidirectional_rnn(fwd_cell, bckwd_cell, x)
     	return output[-1] #return the last output(which is actually the )
+
+
+
+
+
+
