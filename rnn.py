@@ -77,3 +77,6 @@ class RNN(object):
 
    	def decoder(self, initial_state):
    		lstm_cell = tf.nn.rnn_cell.LSTMCell(decoder_hidden_size)
+
+
+        
