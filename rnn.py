@@ -18,7 +18,7 @@ class Config(object):
     embed_size = 50
     encoder_hidden_size = 200
     decoder_hidden_size = encoder_hidden_size * 2
-    batch_size = 2048
+    batch_size = 100 #batch size was previously 2048 
     n_epochs = 10
     lr = 0.001
     max_sentence_len = 10
@@ -76,6 +76,7 @@ class RNN(object):
     	#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
     	(outputs, state) = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, x, cell, vocab_size, vocab_size, embed_size)
 
+'''
     def encoder(self):
     	fwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
     	bckwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
@@ -91,3 +92,4 @@ class RNN(object):
    		tf.nn.seq2seq.attention_decoder(x, )
 
    		tf.nn.dynamic_rnn(lstm_cell, x, initial_state=first_state)
+'''
