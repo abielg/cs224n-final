@@ -22,6 +22,7 @@ class Config(object):
     n_epochs = 10
     lr = 0.001
     max_sentence_len = 10
+    vocab_size = 1000
 
 class RNN(object):
 	def add_placeholders(self):
@@ -68,6 +69,13 @@ class RNN(object):
         return embeddings
         """
 
+    def encoder_decoder(self):
+    	x = self.inputs_placeholder
+    	cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+    	
+    	#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
+    	(outputs, state) = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, x, cell, vocab_size, vocab_size, embed_size)
+
     def encoder(self):
     	fwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
     	bckwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
@@ -76,5 +84,10 @@ class RNN(object):
     	outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fwd_cell, bckwd_cell, x)
     	return tf.concat(output_states, 2)
 
-   	def decoder(self, initial_state):
-   		lstm_cell = tf.nn.rnn_cell.LSTMCell(decoder_hidden_size)
+   	def decoder(self, first_state):
+   		x = self.inputs_placeholder
+   		lstm_cell = tf.nn.rnn_cell.LSTMCell(decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+   		
+   		tf.nn.seq2seq.attention_decoder(x, )
+
+   		tf.nn.dynamic_rnn(lstm_cell, x, initial_state=first_state)
