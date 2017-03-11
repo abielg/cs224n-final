@@ -55,21 +55,14 @@ class RNN(object):
 	   	"""Adds an embedding layer that maps from input tokens (integers) to vectors and then
 	    concatenates those vectors:
 
-        TODO:
             - Create an embedding tensor and initialize it with self.pretrained_embeddings.
             - Use the input_placeholder to index into the embeddings tensor, resulting in a
               tensor of shape (None, max_length, n_features, embed_size).
             - Concatenates the embeddings by reshaping the embeddings tensor to shape
               (None, max_length, n_features * embed_size).
 
-        HINTS:
-            - You might find tf.nn.embedding_lookup useful.
-            - You can use tf.reshape to concatenate the vectors. See
-              following link to understand what -1 in a shape means.
-              https://www.tensorflow.org/api_docs/python/array_ops/shapes_and_shaping#reshape.
-
         Returns:
-            embeddings: tf.Tensor of shape (None, max_length, n_features*embed_size)
+            embeddings: tf.Tensor of shape (None, max_length, embed_size)
         """
 		### YOUR CODE HERE (~4-6 lines)
 		embedding_tensor = tf.Variable(self.embedding_matrix)
@@ -168,7 +161,7 @@ class RNN(object):
 
 		return train_op
 
-	def tokenize_data(self, path, max_sentence_len):
+	def tokenize_data(self, path, max_sentence_len, do_mask):
 		tokenized_data = []
 		masks = []
 		f = open('data/summarization/' + path,'r')
@@ -176,9 +169,10 @@ class RNN(object):
 			sentence = [int(x) for x in line.split()]
 			if len(sentence) > max_sentence_len:
 				continue
-			mask = [True] * len(sentence)
-			mask.extend([False] * (max_sentence_len - len(sentence)))
-			masks.append(mask)
+			if do_mask:
+				mask = [True] * len(sentence)
+				mask.extend([False] * (max_sentence_len - len(sentence)))
+				masks.append(mask)
 			sentence.extend([PAD_ID] * (max_sentence_len - len(sentence)))
 			tokenized_data.append(sentence)
 		print("Tokenized " + path)
@@ -187,13 +181,21 @@ class RNN(object):
 
 	def train_on_batch(self, sess, inputs_batch, labels_batch, mask_batch):
         feed = self.create_feed_dict(inputs_batch, labels_batch=labels_batch, mask_batch=mask_batch)
-        _, loss = sess.run([self.train_op, self.loss], feed_dict=feed)
+        _, loss = sess.run([self.train_op, self.train_loss], feed_dict=feed)
         return loss
 
-	def run_epoch(self, sess, train_examples, dev_set, train_examples_raw, dev_set_raw):
+	def run_epoch(self, sess, train_data, dev_data):
         prog = Progbar(target=1 + int(len(train_examples) / self.config.batch_size))
-        for i, batch in enumerate(get_stacked_minibatches(train_examples, self.config.batch_size)):
-            loss = self.train_on_batch(sess, inputs_batch, labels_batch, mask_batch)
+        
+        train_input, train_truth, train_mask = train_data
+        dev_input, dev_truth, dev_mask = dev_data
+
+        train_batches = get_stacked_minibatches(train_input, self.config.batch_size)
+        truth_batches = get_stacked_minibatches(train_truth, self.config.batch_size)
+        mask_batches = get_stacked_minibatches(train_mask, self.config.batch_size)
+
+        for i, input_batch in enumerate(train_batches):
+            loss = self.train_on_batch(sess, input_batch, truth_batches[i], mask_batches[i])
             prog.update(i + 1, [("train loss", loss)])
             if self.report: self.report.log_train_loss(loss)
         print("")
@@ -208,16 +210,17 @@ class RNN(object):
 		best_score = 0.
 
 		#train_examples = self.preprocess_sequence_data(train_examples_raw)
-		train_input_values, train_input_mask = tokenize_data('train.ids.sentence', self.config.max_sentence_len)
-		train_ground_truth, train_ground_truth_mask = tokenize_data('train.ids.headline', self.config.max_sentence_len)
+		train_input_values, _ = tokenize_data('train.ids.sentence', self.config.max_sentence_len, False)
+		train_ground_truth, train_ground_truth_mask = tokenize_data('train.ids.headline', self.config.max_sentence_len, True)
 
 		#dev_set = self.preprocess_sequence_data(dev_set_raw)
-		dev_input_values, dev_input_mask = tokenize_data('val.ids.sentence', self.config.max_sentence_len)
-		dev_ground_truth, dev_ground_truth_mask = tokenize_data('val.ids.headline', self.config.max_sentence_len)
+		dev_input_values, _ = tokenize_data('val.ids.sentence', self.config.max_sentence_len, False)
+		dev_ground_truth, dev_ground_truth_mask = tokenize_data('val.ids.headline', self.config.max_sentence_len, True)
 
 		for epoch in range(self.config.n_epochs):
 			logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
-			score = self.run_epoch(sess, train_examples, dev_set, train_examples_raw, dev_set_raw)
+			score = self.run_epoch(sess, (train_input_values, train_ground_truth, train_ground_truth_mask), \
+									(dev_input_values, dev_ground_truth, dev_ground_truth_mask))
 			if score > best_score:
 				best_score = score
 				if saver:
@@ -233,18 +236,24 @@ class RNN(object):
 
 	def build(self):
 		self.add_placeholders()
-		self.pred = self.add_pred_single_batch_train()
-		self.loss = self.add_loss_op(self.pred)
-		self.train_op = self.add_training_op(self.loss)
+		self.train_pred = self.add_pred_single_batch_train()
+		self.train_loss = self.add_loss_op(self.train_pred)
+		self.train_op = self.add_training_op(self.train_loss)
+
+		self.dev_pred = self.add_pred_single_batch_test
+		self.dev_loss = self.add_loss_op(self.dev_pred)
+
+		
+		#######
+		with tf.Session() as sess:
+			sess.run(tf.global_variables_initializer())
+			self.fit(sess)
+
 
 
 
 if __name__ == '__main__':
 	config = Config()
-
-	#input_values, input_mask = tokenize_data('train.ids.sentence', config.max_sentence_len)
-	#ground_truth, ground_truth_mask = tokenize_data('train.ids.headline', config.max_sentence_len)
-
 	rnn = RNN(config)
 	rnn.build()
 
