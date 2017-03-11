@@ -39,7 +39,7 @@ class RNN(object):
 		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len]))
 		#SWITHCED TYPE OF THE PLACEHOLDERS FROM FLOAT TO INT
 
-	def create_feed_dict(self, inputs_batch, labels_batch=None, mask_batch):
+	def create_feed_dict(self, inputs_batch, labels_batch=None, mask_batch=None):
 		feed_dict = {
 			self.inputs_placeholder: inputs_batch,
 		}
@@ -121,83 +121,141 @@ class RNN(object):
     the headline are passed in as inputs to the decoder. At test time, the previous decoder output is passed
     into the next decoder cell's input. Function handles a single batch.
     """
-    def add_pred_single_batch_train(self):
-    	x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
-        y = self.labels_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+	def add_pred_single_batch_train(self):
+		x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+		y = self.labels_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
 
-    	cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-    	
-    	#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
+		cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 
-        # TODO: will need to convert x and y from matrices to lists before they can be fed into legacy
-    	outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size)
-        """
-        outputs: A list of the same length as decoder_inputs of 2D Tensors with shape [batch_size x num_decoder_symbols] 
-        containing the generated outputs
-        """
-        return outputs # list (word by word) of 2D tensors: [batch_size, vocab_size]
+		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
 
-
-    # Handles a single batch, returns the outputs
-    def add_pred_single_batch_test(self):
-        x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
-        # don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
-
-        # need to verify that this is initialized correctly
-        cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-        outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, feed_previous=True)
-
-        return outputs
-
-    # assumes we already have padding implemented.
+		# TODO: will need to convert x and y from matrices to lists before they can be fed into legacy
+		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size)
+		"""
+		outputs: A list of the same length as decoder_inputs of 2D Tensors with shape [batch_size x num_decoder_symbols] 
+		containing the generated outputs
+		"""
+		return outputs # list (word by word) of 2D tensors: [batch_size, vocab_size]
 
 
-    def add_loss_op(self, preds):
+	# Handles a single batch, returns the outputs
+	def add_pred_single_batch_test(self):
+		x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+		# don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
 
-        """
-        preds: [batch_size x max_sent_length x vocab_size] (need to convert output of legacy to tensor of this shape)
-        labels: [batch_size x max_sentence_length] (IDs. either convert self.labels_placeholder, or save original input)
+		# need to verify that this is initialized correctly
+		cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, feed_previous=True)
 
-        """
-        labels = # need to fill this in with rank 2 tensor with words as ID numbers. can save in config
-        ce = tf.nn.sparse_softmax_cross_entropy_with_logits(labels, preds)
-        # shape of ce: same as labels, with same type as preds [batch_size x max_sentence_length]
-        ce = tf.boolean_mask(ce, self.mask_placeholder)
-        loss = tf.reduce_mean(ce)
+		return outputs
 
+	# assumes we already have padding implemented.
+
+
+	def add_loss_op(self, preds):
+
+		"""
+		preds: [batch_size x max_sent_length x vocab_size] (need to convert output of legacy to tensor of this shape)
+		labels: [batch_size x max_sentence_length] (IDs. either convert self.labels_placeholder, or save original input)
+
+		"""
+		#labels = # need to fill this in with rank 2 tensor with words as ID numbers. can save in config
+		ce = tf.nn.sparse_softmax_cross_entropy_with_logits(labels, preds)
+		# shape of ce: same as labels, with same type as preds [batch_size x max_sentence_length]
+		ce = tf.boolean_mask(ce, self.mask_placeholder)
+		loss = tf.reduce_mean(ce)
+
+		return loss
+
+
+	def add_training_op(self, loss):
+
+		train_op = tf.train.AdadeltaOptimizer(self.config.lr).minimize(loss) # same optimizer as in IBM paper
+		# Similar to Adagrad, which gives smaller updates to frequent params and larger updates to infrequent parameters.
+		# Improves on Adagrad by addressing Adagrad's aggressive, monotonically decreasing learning rate.
+
+		return train_op
+
+	def tokenize_data(self, path, max_sentence_len):
+		tokenized_data = []
+		masks = []
+		f = open('data/summarization/' + path,'r')
+		for line in f.readlines():
+			sentence = [int(x) for x in line.split()]
+			if len(sentence) > max_sentence_len:
+				continue
+			mask = [True] * len(sentence)
+			mask.extend([False] * (max_sentence_len - len(sentence)))
+			masks.append(mask)
+			sentence.extend([PAD_ID] * (max_sentence_len - len(sentence)))
+			tokenized_data.append(sentence)
+		print("Tokenized " + path)
+		print(tokenized_data)
+		return tokenized_data, masks
+
+	def train_on_batch(self, sess, inputs_batch, labels_batch, mask_batch):
+        feed = self.create_feed_dict(inputs_batch, labels_batch=labels_batch, mask_batch=mask_batch)
+        _, loss = sess.run([self.train_op, self.loss], feed_dict=feed)
         return loss
 
+	def run_epoch(self, sess, train_examples, dev_set, train_examples_raw, dev_set_raw):
+        prog = Progbar(target=1 + int(len(train_examples) / self.config.batch_size))
+        for i, batch in enumerate(get_stacked_minibatches(train_examples, self.config.batch_size)):
+            loss = self.train_on_batch(sess, *batch)####check this
+            prog.update(i + 1, [("train loss", loss)])
+            if self.report: self.report.log_train_loss(loss)
+        print("")
 
-    def add_training_op(self, loss):
+        #logger.info("Evaluating on training data")
+        #token_cm, entity_scores = self.evaluate(sess, train_examples, train_examples_raw)
+        #logger.debug("Token-level confusion matrix:\n" + token_cm.as_table())
+        #logger.debug("Token-level scores:\n" + token_cm.summary())
+        #logger.info("Entity level P/R/F1: %.2f/%.2f/%.2f", *entity_scores)
 
-        train_op = tf.train.AdadeltaOptimizer(self.config.lr).minimize(loss) # same optimizer as in IBM paper
-        # Similar to Adagrad, which gives smaller updates to frequent params and larger updates to infrequent parameters.
-        # Improves on Adagrad by addressing Adagrad's aggressive, monotonically decreasing learning rate.
+        logger.info("Evaluating on development data")
+        token_cm, entity_scores = self.evaluate(sess, dev_set, dev_set_raw)
+        logger.debug("Token-level confusion matrix:\n" + token_cm.as_table())
+        logger.debug("Token-level scores:\n" + token_cm.summary())
+        logger.info("Entity level P/R/F1: %.2f/%.2f/%.2f", *entity_scores)
 
-        return train_op
+        f1 = entity_scores[-1]
+        return f1
+
+	def fit(self, sess):
+		best_score = 0.
+
+		#train_examples = self.preprocess_sequence_data(train_examples_raw)
+		train_input_values, train_input_mask = tokenize_data('train.ids.sentence', self.config.max_sentence_len)
+		train_ground_truth, train_ground_truth_mask = tokenize_data('train.ids.headline', self.config.max_sentence_len)
+
+		#dev_set = self.preprocess_sequence_data(dev_set_raw)
+		dev_input_values, dev_input_mask = tokenize_data('val.ids.sentence', self.config.max_sentence_len)
+		dev_ground_truth, dev_ground_truth_mask = tokenize_data('val.ids.headline', self.config.max_sentence_len)
+
+		for epoch in range(self.config.n_epochs):
+			logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
+			score = self.run_epoch(sess, train_examples, dev_set, train_examples_raw, dev_set_raw)
+			if score > best_score:
+				best_score = score
+				if saver:
+					logger.info("New best score! Saving model in %s", self.config.model_output)
+					saver.save(sess, self.config.model_output)
+			print("")
+			
+			if self.report:
+				self.report.log_epoch()
+				self.report.save()
+			
+		return best_score
 
 
-def tokenize_data(path, max_sentence_len):
-	tokenized_data = []
-	f = open('data/summarization/' + path,'r')
-	for line in f.readlines():
-		sentence = [int(x) for x in line.split()]
-		if len(sentence) > max_sentence_len:
-			continue
-		sentence.extend([PAD_ID] * (max_sentence_len - len(sentence)))
-		tokenized_data.append(sentence)
-	print("Tokenized " + path)
-	print(tokenized_data)
-	return tokenized_data
-
-def prepare_data_2(sentence_path, headline_path, max_len):
-	input = tokenize_data(sentence_path, max_len)
-	ground_truth = tokenize_data(headline_path, max_len)
-	return input, ground_truth
 
 if __name__ == '__main__':
 	config = Config()
-	input, ground_truth = prepare_data_2('train.ids.sentence', 'train.ids.headline', config.max_sentence_len)
+
+	input_values, input_mask = tokenize_data('train.ids.sentence', config.max_sentence_len)
+	ground_truth, ground_truth_mask = tokenize_data('train.ids.headline', config.max_sentence_len)
+
 	rnn = RNN(config)
 	rnn.add_placeholders()
 	rnn.create_feed_dict(input, ground_truth)
