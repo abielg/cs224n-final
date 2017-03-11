@@ -121,7 +121,6 @@ class RNN(object):
 
 		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
 
-		# TODO: will need to convert x and y from matrices to lists before they can be fed into legacy
 		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size)
 		"""
 		outputs: A list of the same length as decoder_inputs of 2D Tensors with shape [batch_size x num_decoder_symbols] 
@@ -185,6 +184,7 @@ class RNN(object):
 		print(tokenized_data)
 		return tokenized_data, masks
 
+	# 
 	def train_on_batch(self, sess, inputs_batch, labels_batch, mask_batch):
         feed = self.create_feed_dict(inputs_batch, labels_batch=labels_batch, mask_batch=mask_batch)
         _, loss = sess.run([self.train_op, self.loss], feed_dict=feed)
