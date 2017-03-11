@@ -35,15 +35,19 @@ class RNN(object):
 	def add_placeholders(self):
 		self.inputs_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="x")
 		self.labels_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="y")
-		#self.mask_placeholder = # need to implement this shit for cost function
+		# still not sure that we need the 1's above
+		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len]))
 		#SWITHCED TYPE OF THE PLACEHOLDERS FROM FLOAT TO INT
 
-	def create_feed_dict(self, inputs_batch, labels_batch=None):
+	def create_feed_dict(self, inputs_batch, labels_batch=None, mask_batch):
 		feed_dict = {
 			self.inputs_placeholder: inputs_batch,
 		}
 		if labels_batch is not None:
 			feed_dict[self.labels_placeholder] = labels_batch
+
+		if mask_batch is not None: # TODO: create mask_batch using ground truth
+			feed_dict[self.mask_placeholder] = mask_batch
 		return feed_dict
 
 
@@ -125,22 +129,29 @@ class RNN(object):
 
 
     def add_loss_op(self, preds):
-        # what loss function to use? cross entropy
-        # input shape?
-        # output shape?
-        # how often do we backprop?
 
         """
-        preds: [batch_size x vocab_size]
-        self.labels_placeholder: [batch_size x max_sentence_length]
+        preds: [batch_size x max_sent_length x vocab_size] (need to convert output of legacy to tensor of this shape)
+        labels: [batch_size x max_sentence_length] (IDs. either convert self.labels_placeholder, or save original input)
 
         """
-
-        ce = tf.nn.sparse_softmax_cross_entropy_with_logits(preds, self.labels_placeholder)
+        labels = # need to fill this in with rank 2 tensor with words as ID numbers. can save in config
+        ce = tf.nn.sparse_softmax_cross_entropy_with_logits(labels, preds)
+        # shape of ce: same as labels, with same type as preds [batch_size x max_sentence_length]
         ce = tf.boolean_mask(ce, self.mask_placeholder)
         loss = tf.reduce_mean(ce)
 
         return loss
+
+
+    def add_training_op(self, loss):
+
+        train_op = tf.train.AdadeltaOptimizer(self.config.lr).minimize(loss) # same optimizer as in IBM paper
+        # Similar to Adagrad, which gives smaller updates to frequent params and larger updates to infrequent parameters.
+        # Improves on Adagrad by addressing Adagrad's aggressive, monotonically decreasing learning rate.
+
+        return train_op
+
 
 def tokenize_data(path, max_sentence_len):
 	tokenized_data = []
