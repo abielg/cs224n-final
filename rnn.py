@@ -33,7 +33,7 @@ class RNN(object):
 		self.embedding_matrix = loaded['glove']
 
 	def add_placeholders(self):
-		self.inputs_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="x")
+		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="x")
 		self.labels_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="y")
 		# still not sure that we need the 1's above
 		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len]))
@@ -115,7 +115,7 @@ class RNN(object):
     """
 	def add_pred_single_batch_train(self):
 		x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
-		y = self.labels_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+		y = self.labels_placeholder_list # must be 1D list of int32 Tensors of shape [batch_size]
 
 		cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 
@@ -193,22 +193,13 @@ class RNN(object):
 	def run_epoch(self, sess, train_examples, dev_set, train_examples_raw, dev_set_raw):
         prog = Progbar(target=1 + int(len(train_examples) / self.config.batch_size))
         for i, batch in enumerate(get_stacked_minibatches(train_examples, self.config.batch_size)):
-            loss = self.train_on_batch(sess, *batch)####check this
+            loss = self.train_on_batch(sess, inputs_batch, labels_batch, mask_batch)
             prog.update(i + 1, [("train loss", loss)])
             if self.report: self.report.log_train_loss(loss)
         print("")
 
-        #logger.info("Evaluating on training data")
-        #token_cm, entity_scores = self.evaluate(sess, train_examples, train_examples_raw)
-        #logger.debug("Token-level confusion matrix:\n" + token_cm.as_table())
-        #logger.debug("Token-level scores:\n" + token_cm.summary())
-        #logger.info("Entity level P/R/F1: %.2f/%.2f/%.2f", *entity_scores)
-
         logger.info("Evaluating on development data")
         token_cm, entity_scores = self.evaluate(sess, dev_set, dev_set_raw)
-        logger.debug("Token-level confusion matrix:\n" + token_cm.as_table())
-        logger.debug("Token-level scores:\n" + token_cm.summary())
-        logger.info("Entity level P/R/F1: %.2f/%.2f/%.2f", *entity_scores)
 
         f1 = entity_scores[-1]
         return f1
@@ -240,19 +231,28 @@ class RNN(object):
 			
 		return best_score
 
+	def build(self):
+		self.add_placeholders()
+		self.pred = self.add_pred_single_batch_train()
+		self.loss = self.add_loss_op(self.pred)
+		self.train_op = self.add_training_op(self.loss)
+
 
 
 if __name__ == '__main__':
 	config = Config()
 
-	input_values, input_mask = tokenize_data('train.ids.sentence', config.max_sentence_len)
-	ground_truth, ground_truth_mask = tokenize_data('train.ids.headline', config.max_sentence_len)
+	#input_values, input_mask = tokenize_data('train.ids.sentence', config.max_sentence_len)
+	#ground_truth, ground_truth_mask = tokenize_data('train.ids.headline', config.max_sentence_len)
 
 	rnn = RNN(config)
+	rnn.build()
+
+	'''	
 	rnn.add_placeholders()
 	rnn.create_feed_dict(input, ground_truth)
 	rnn.encoder_decoder()
-
+	'''
 
 #GROUND TRUTH = HEADLINE
 #INPUT = SENTENCE
