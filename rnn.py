@@ -114,7 +114,6 @@ class RNN(object):
 
 		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
 
-		# TODO: will need to convert x and y from matrices to lists before they can be fed into legacy
 		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size)
 		"""
 		outputs: A list of the same length as decoder_inputs of 2D Tensors with shape [batch_size x num_decoder_symbols] 
@@ -132,7 +131,7 @@ class RNN(object):
 		cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, feed_previous=True)
 
-		return outputs
+		return outputs  # list (word by word) of 2D tensors: [batch_size, vocab_size]
 
 	# assumes we already have padding implemented.
 
@@ -179,6 +178,7 @@ class RNN(object):
 		print(tokenized_data)
 		return tokenized_data, masks
 
+	# 
 	def train_on_batch(self, sess, inputs_batch, labels_batch, mask_batch):
         feed = self.create_feed_dict(inputs_batch, labels_batch=labels_batch, mask_batch=mask_batch)
         _, loss = sess.run([self.train_op, self.train_loss], feed_dict=feed)
@@ -201,7 +201,7 @@ class RNN(object):
         print("")
 
         logger.info("Evaluating on development data")
-        token_cm, entity_scores = self.evaluate(sess, dev_set, dev_set_raw)
+        token_cm, entity_scores = self.evaluate(sess, dev_set, dev_set_raw) # print loss on dev set
 
         f1 = entity_scores[-1]
         return f1
@@ -240,15 +240,26 @@ class RNN(object):
 		self.train_loss = self.add_loss_op(self.train_pred)
 		self.train_op = self.add_training_op(self.train_loss)
 
-		self.dev_pred = self.add_pred_single_batch_test
+		self.dev_pred = self.add_pred_single_batch_test()
 		self.dev_loss = self.add_loss_op(self.dev_pred)
 
-		
-		#######
-		with tf.Session() as sess:
-			sess.run(tf.global_variables_initializer())
-			self.fit(sess)
 
+	## Elliott's most recent additions 【=◈︿◈=】
+
+	# dev_loss is likely to be much higher than train_loss, since we're feeding in prev outputs (instead of ground truth)
+	# into the decoder
+    def compute_dev_loss(self, sess, inputs_batch, labels_batch, mask_batch):
+	    """Compute dev loss for a single batch
+
+	    Args:
+	        sess: tf.Session()
+	        input_batch: np.ndarray of shape (n_samples, n_features)
+	    Returns:
+	        predictions: np.ndarray of shape (n_samples, n_classes)
+	    """
+	    feed = self.create_feed_dict(inputs_batch, labels_batch, mask_batch)
+	    dev_loss = sess.run(self.dev_loss, feed_dict=feed)
+    return dev_loss
 
 
 
