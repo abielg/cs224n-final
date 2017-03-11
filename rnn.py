@@ -79,14 +79,6 @@ class RNN(object):
 		### END YOUR CODE
 		return embeddings
         
-
-	def encoder_decoder(self):
-		x = self.add_embedding()
-		cell = tf.nn.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		
-		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
-		(outputs, state) = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, x, cell, vocab_size, vocab_size, embed_size)
-
 	'''
 	returns a list with lists containing the first words of all sentences, then the second words, then
 	the third words, etc. [[a1, b1, c1], [a2, b2, c2], [a3, b3, c3]] for sentences [a1, a2, a3], [b1, b2, b3] etc
@@ -141,6 +133,7 @@ class RNN(object):
     # Handles a single batch, returns the outputs
     def add_pred_single_batch_test(self):
         x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+        # TODO: change initialization of x. this placeholder cannot store a list of Tensors
         # don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
 
         # need to verify that this is initialized correctly
@@ -202,7 +195,6 @@ if __name__ == '__main__':
 	rnn.add_placeholders()
 	rnn.create_feed_dict(input, ground_truth)
 	rnn.encoder_decoder()
-
 
 
 #GROUND TRUTH = HEADLINE
