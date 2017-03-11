@@ -1,7 +1,6 @@
 import tensorflow as tf
 from model import Model
 
-tf.nn.rnn_cell.BasicLSTMCell
 
 class Config(object):
     """Holds model hyperparams and data information.
@@ -26,10 +25,13 @@ class Config(object):
 
 class RNN(object):
 	def add_placeholders(self):
-		self.inputs_placeholder = tf.placeholder(tf.float32, shape=([None, max_sentence_len, 1]), name="x") # none so that that dimension will be batch size
-        
-        ######### DOUBLE CHECK SIZE OF LABELS PLACEHOLDER ###############
-        self.labels_placeholder = tf.placeholder(tf.float32, shape=([None, max_sentence_len, 1]), name="y")
+        # might need to change stuff in following line
+		self.encoder_inputs_placeholder = tf.placeholder(tf.float32, shape=([None, self.config.max_sentence_len]), name="x") # none so that that dimension will be batch size
+
+        # None dimension will get filled in with batch_size
+        self.labels_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len]), name="y")
+
+        self.mask_placeholder = # need to implement this shit for cost function
 
 
     def create_feed_dict(self, inputs_batch, labels_batch=None):
@@ -41,7 +43,8 @@ class RNN(object):
         return feed_dict
 
 
-	def add_embedding(self):
+    # pretty sure we don't need this
+	def add_embedding(self): 
 	   """Adds an embedding layer that maps from input tokens (integers) to vectors and then
         concatenates those vectors:
 
@@ -68,13 +71,69 @@ class RNN(object):
         ### END YOUR CODE
         return embeddings
         """
+    """
+    We need two different functions for training and testing. At training time, the word vectors representing
+    the headline are passed in as inputs to the decoder. At test time, the previous decoder output is passed
+    into the next decoder cell's input. Function handles a single batch.
+    """
+    def add_pred_single_batch_train(self):
+    	x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+        y = self.labels_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
 
-    def encoder_decoder(self):
-    	x = self.inputs_placeholder
     	cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
     	
     	#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
-    	(outputs, state) = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, x, cell, vocab_size, vocab_size, embed_size)
+
+        # TODO: will need to convert x and y from matrices to lists before they can be fed into legacy
+    	outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size)
+        """
+        outputs: A list of the same length as decoder_inputs of 2D Tensors with shape [batch_size x num_decoder_symbols] 
+        containing the generated outputs
+        """
+        return outputs # list (word by word) of 2D tensors: [batch_size, vocab_size]
+
+
+    # Handles a single batch, returns the outputs
+    def add_pred_single_batch_test(self):
+        x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+        # don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
+
+        # need to verify that this is initialized correctly
+        cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+        outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, feed_previous=True)
+
+        return outputs
+
+    # assumes we already have padding implemented.
+
+
+    def add_loss_op(self, preds):
+        # what loss function to use? cross entropy
+        # input shape?
+        # output shape?
+        # how often do we backprop?
+
+        """
+        preds: [batch_size x vocab_size]
+        self.labels_placeholder: [batch_size x max_sentence_length]
+
+        """
+
+        ce = tf.nn.sparse_softmax_cross_entropy_with_logits(preds, self.labels_placeholder)
+        ce = tf.boolean_mask(ce, self.mask_placeholder)
+        loss = tf.reduce_mean(ce)
+
+        return loss
+
+"""
+    def encoder_decoder_train2(self): # second version used to fix problem: inputs of seq2seq.embedding ... must take in ints
+        x = self.encoder_inputs_placeholder
+        y = self.labels_placeholder
+
+        cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+
+      # commented out so code will compile  enc_hidden_states, output_states = tf.nn.bidirectional_dynamic_rnn(cell, cell, x, sequence_length=??, dtype=tf.float32, time_major=??)
+"""
 
 '''
     def encoder(self):
