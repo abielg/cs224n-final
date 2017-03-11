@@ -83,8 +83,32 @@ class RNN(object):
 		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
 		(outputs, state) = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, x, cell, vocab_size, vocab_size, embed_size)
 
-	def get_minibatches(self, tokenized_data):
-		return np.stack(tokenized_data, axis=1)
+	'''
+	returns a list with lists containing the first words of all sentences, then the second words, then
+	the third words, etc. [[a1, b1, c1], [a2, b2, c2], [a3, b3, c3]] for sentences [a1, a2, a3], [b1, b2, b3] etc
+	'''
+	def get_stacked_minibatches(self, tokenized_data, batch_size):
+		batches = []
+		prev_val = 0
+		for step in xrange(batch_size, len(tokenized_data) + batch_size, batch_size):
+			batch = tokenized_data[prev_val:step]
+			prev_val = step
+			batches.append( np.stack(batch, axis=1) )
+		return batches
+
+	def get_reg_minibatches(self, tokenized_data, batch_size):
+		batches = []
+		prev_val = 0
+		for step in xrange(batch_size, len(tokenized_data) + batch_size, batch_size):
+			batches.append( tokenized_data[prev_val:step] )
+			prev_val = step
+		return batches
+
+	def test_stacked_minibatches():
+		data = [[1,2,3,4], [1,2,3,4], [1,2,3,4]]
+		result = get_minibatches(data, 2)
+		assert result == [[[1,1],[2,2],[3,3],[4,4]],[[1],[2],[3],[4]]]
+		print("minibatches function is correct")
 
 
 
