@@ -35,6 +35,7 @@ class RNN(object):
 	def add_placeholders(self):
 		self.inputs_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="x")
 		self.labels_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="y")
+		#self.mask_placeholder = # need to implement this shit for cost function
 		#SWITHCED TYPE OF THE PLACEHOLDERS FROM FLOAT TO INT
 
 	def create_feed_dict(self, inputs_batch, labels_batch=None):
@@ -87,23 +88,59 @@ class RNN(object):
 
 
 
+	""" ELLIOTTS ADDITIONS
+    We need two different functions for training and testing. At training time, the word vectors representing
+    the headline are passed in as inputs to the decoder. At test time, the previous decoder output is passed
+    into the next decoder cell's input. Function handles a single batch.
+    """
+    def add_pred_single_batch_train(self):
+    	x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+        y = self.labels_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
 
-'''
-def prepare_data():
-	path = "data/summarization/"
-	data_files = [path + "train.ids.headline", path + "train.ids.summary"]
-	queue = tf.train.string_input_producer(data_files, num_epochs=10)  		
-	reader = tf.TextLineReader()
-	key, value = reader.read(queue)
-	tensor = tf.decode_raw(value, tf.int32)
-	
+    	cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+    	
+    	#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
+
+        # TODO: will need to convert x and y from matrices to lists before they can be fed into legacy
+    	outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size)
+        """
+        outputs: A list of the same length as decoder_inputs of 2D Tensors with shape [batch_size x num_decoder_symbols] 
+        containing the generated outputs
+        """
+        return outputs # list (word by word) of 2D tensors: [batch_size, vocab_size]
 
 
-	with tf.Session() as sess:
-		sess.run(tf.global_variables_initializer())
-		coord = tf.train.Coordinator()
-  		threads = tf.train.start_queue_runners(coord=coord)
-'''
+    # Handles a single batch, returns the outputs
+    def add_pred_single_batch_test(self):
+        x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+        # don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
+
+        # need to verify that this is initialized correctly
+        cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+        outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, feed_previous=True)
+
+        return outputs
+
+    # assumes we already have padding implemented.
+
+
+    def add_loss_op(self, preds):
+        # what loss function to use? cross entropy
+        # input shape?
+        # output shape?
+        # how often do we backprop?
+
+        """
+        preds: [batch_size x vocab_size]
+        self.labels_placeholder: [batch_size x max_sentence_length]
+
+        """
+
+        ce = tf.nn.sparse_softmax_cross_entropy_with_logits(preds, self.labels_placeholder)
+        ce = tf.boolean_mask(ce, self.mask_placeholder)
+        loss = tf.reduce_mean(ce)
+
+        return loss
 
 def tokenize_data(path, max_sentence_len):
 	tokenized_data = []
@@ -123,6 +160,21 @@ def prepare_data_2(sentence_path, headline_path, max_len):
 	ground_truth = tokenize_data(headline_path, max_len)
 	return input, ground_truth
 
+if __name__ == '__main__':
+	config = Config()
+	input, ground_truth = prepare_data_2('train.ids.sentence', 'train.ids.headline', config.max_sentence_len)
+	rnn = RNN(config)
+	rnn.add_placeholders()
+	rnn.create_feed_dict(input, ground_truth)
+	rnn.encoder_decoder()
+
+
+
+#GROUND TRUTH = HEADLINE
+#INPUT = SENTENCE
+
+
+
 '''
     def encoder(self):
     	fwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
@@ -140,16 +192,22 @@ def prepare_data_2(sentence_path, headline_path, max_len):
    		tf.nn.dynamic_rnn(lstm_cell, x, initial_state=first_state)
 '''
 
-if __name__ == '__main__':
-	config = Config()
-	input, ground_truth = prepare_data_2('train.ids.sentence', 'train.ids.headline', config.max_sentence_len)
-	rnn = RNN(config)
-	rnn.add_placeholders()
-	rnn.create_feed_dict(input, ground_truth)
-	rnn.encoder_decoder()
 
 
 
-#GROUND TRUTH = HEADLINE
-#INPUT = SENTENCE
+'''
+def prepare_data():
+	path = "data/summarization/"
+	data_files = [path + "train.ids.headline", path + "train.ids.summary"]
+	queue = tf.train.string_input_producer(data_files, num_epochs=10)  		
+	reader = tf.TextLineReader()
+	key, value = reader.read(queue)
+	tensor = tf.decode_raw(value, tf.int32)
+	
 
+
+	with tf.Session() as sess:
+		sess.run(tf.global_variables_initializer())
+		coord = tf.train.Coordinator()
+  		threads = tf.train.start_queue_runners(coord=coord)
+'''
