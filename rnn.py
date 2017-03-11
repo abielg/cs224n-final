@@ -128,7 +128,6 @@ def prepare_data_2(sentence_path, headline_path, max_len):
     	fwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
     	bckwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
     	x = self.inputs_placeholder
-
     	outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fwd_cell, bckwd_cell, x)
     	return tf.concat(output_states, 2)
 
@@ -140,8 +139,6 @@ def prepare_data_2(sentence_path, headline_path, max_len):
 
    		tf.nn.dynamic_rnn(lstm_cell, x, initial_state=first_state)
 '''
-
-
 
 if __name__ == '__main__':
 	config = Config()
@@ -155,3 +152,4 @@ if __name__ == '__main__':
 
 #GROUND TRUTH = HEADLINE
 #INPUT = SENTENCE
+
