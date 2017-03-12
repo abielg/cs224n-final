@@ -235,6 +235,12 @@ class RNN(object):
 			
 		return best_score
 
+	def output_predictions(self, preds):
+		output_file = open('dev_predictions', 'w')
+		for i in range(tf.shape(preds)[0]):
+			index = tf.argmax(preds[i])\
+
+
 	def build(self):
 		self.add_placeholders()
 		self.train_pred = self.add_pred_single_batch_train()
@@ -242,6 +248,7 @@ class RNN(object):
 		self.train_op = self.add_training_op(self.train_loss)
 
 		self.dev_pred = self.add_pred_single_batch_test()
+		output_predictions(self.dev_pred)
 		self.dev_loss = self.add_loss_op(self.dev_pred)
 
 
@@ -260,8 +267,33 @@ class RNN(object):
 	    """
 	    feed = self.create_feed_dict(inputs_batch, labels_batch, mask_batch)
 	    dev_loss = sess.run(self.dev_loss, feed_dict=feed)
-    return dev_loss
+    	return dev_loss
 
+    def do_train(self):
+		with tf.Graph().as_default():
+			logger.info("Building model...",)
+			start = time.time()
+			config = Config()
+			rnn = RNN(config)
+			logger.info("took %.2f seconds", time.time() - start)
+
+			init = tf.global_variables_initializer()
+
+			with tf.Session() as session:
+				session.run(init)
+				model.fit(session)
+
+				# Save predictions in a text file.
+				output = model.output(session, dev_raw)
+				sentences, labels, predictions = zip(*output)
+				predictions = [[LBLS[l] for l in preds] for preds in predictions]
+				output = zip(sentences, labels, predictions)
+
+				with open(model.config.conll_output, 'w') as f:
+					write_conll(f, output)
+				with open(model.config.eval_output, 'w') as f:
+					for sentence, labels, predictions in output:
+						print_sentence(f, sentence, labels, predictions)
 
 
 if __name__ == '__main__':
