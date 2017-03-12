@@ -190,19 +190,21 @@ class RNN(object):
         _, loss = sess.run([self.train_op, self.loss], feed_dict=feed)
         return loss
 
+    # what format are train_examples and dev_set saved in?
 	def run_epoch(self, sess, train_examples, dev_set, train_examples_raw, dev_set_raw):
         prog = Progbar(target=1 + int(len(train_examples) / self.config.batch_size))
+
         for i, batch in enumerate(get_stacked_minibatches(train_examples, self.config.batch_size)):
             loss = self.train_on_batch(sess, inputs_batch, labels_batch, mask_batch)
             prog.update(i + 1, [("train loss", loss)])
+
             if self.report: self.report.log_train_loss(loss)
         print("")
 
         logger.info("Evaluating on development data")
-        token_cm, entity_scores = self.evaluate(sess, dev_set, dev_set_raw) # print loss on dev set
+        dev_loss = self.compute_dev_loss(sess, dev_set) # print loss on dev set. need to pass in correct args of dev_set
 
-        f1 = entity_scores[-1]
-        return f1
+        return dev_loss # TODO: to check where the return value is used
 
 	def fit(self, sess):
 		best_score = 0.
