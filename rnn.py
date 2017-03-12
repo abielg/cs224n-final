@@ -20,7 +20,7 @@ class Config(object):
 	embed_size = 50
 	encoder_hidden_size = 200
 	decoder_hidden_size = encoder_hidden_size * 2
-	batch_size = 3 #batch size was previously 2048
+	batch_size = 3 # batch size was previously 2048
 	n_epochs = 10
 	lr = 0.001
 	max_sentence_len = 20
@@ -203,7 +203,7 @@ class RNN(object):
         print("")
 
         logger.info("Evaluating on development data")
-        dev_loss = self.compute_dev_loss(sess, dev_set) # print loss on dev set. need to pass in correct args of dev_set
+        dev_loss = self.compute_dev_loss(sess, dev_input, dev_truth, dev_mask) # print loss on dev set
 
         return dev_loss # TODO: to check where the return value is used
 
