@@ -47,7 +47,7 @@ class RNN(object):
         self.log_output = self.output_path + "log" # save logging
 
 	def add_placeholders(self):
-		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="x")
+		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]), name="x")
 		self.labels_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="y")
 		# still not sure that we need the 1's above
 		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len]))
@@ -179,14 +179,20 @@ class RNN(object):
   	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_train(self):
 		x_unstacked = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
-		# TODO: change initialization of x. this placeholder cannot store a list of Tensors
+		# TODO: might need to change x. unsure whether or not a placeholder can store a list of tensors
         # don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
 
-		# need to verify that this is initialized correctly
-		cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, feed_previous=False)
+        # used encoder hidden size for output projection since this model uses a unidirectional LSTM encoder
+		W = tf.Variable("W", shape=[self.config.encoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
+        b = tf.Variable("b", shape=[self.config.vocab_size], initializer=tf.constant_initializer(0.0))
 
-		return tf.concat(outputs, 2)
+        output_proj_vars = (W, b)
+
+		# need to verify that this is initialized correctly
+		cell = tf.nn.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		preds, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, x, cell, vocab_size, vocab_size, embed_size, output_proj_vars, feed_previous=False)
+
+		return preds
 
 	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_test(self):
@@ -227,6 +233,7 @@ class RNN(object):
 
 		return train_op
 
+	#Returns a list of sentences, which in turn are lists of integers that represent words
 	def tokenize_data(self, path, max_sentence_len, do_mask):
 		tokenized_data = []
 		masks = []
@@ -254,11 +261,14 @@ class RNN(object):
         return loss
 
 
-	def run_epoch(self, sess,  train_input_batches, train_truth_batches, train_mask_batch):
+	def run_epoch(self, sess,  train_data, dev_data):
         prog = Progbar(target=1 + int(len(train_examples) / self.config.batch_size))
+
+        train_input_batches, train_truth_batches, train_mask_batches = train_data
+        dev_input_batches, dev_truth_batches, dev_mask_batches = dev_data
         
         for i, input_batch in enumerate(train_input_batches):
-            loss = self.train_on_batch(sess, input_batch, train_truth_batches[i], train_mask_batch[i])
+            loss = self.train_on_batch(sess, input_batch, train_truth_batches[i], train_mask_batches[i])
             prog.update(i + 1, [("train loss", loss)])
 
             if self.report: self.report.log_train_loss(loss)
@@ -277,23 +287,30 @@ class RNN(object):
 		train_truth, train_truth_mask, train_truth_len = tokenize_data('train.ids.headline', self.config.max_sentence_len, True)
 
 		#dev_set = self.preprocess_sequence_data(dev_set_raw)
-		dev_input_values, _, dev_input_len = tokenize_data('val.ids.sentence', self.config.max_sentence_len, False)
-		dev_ground_truth, dev_ground_truth_mask, dev_truth_len = tokenize_data('val.ids.headline', self.config.max_sentence_len, True)
+		dev_input, _, dev_input_len = tokenize_data('val.ids.sentence', self.config.max_sentence_len, False)
+		dev_truth, dev_truth_mask, dev_truth_len = tokenize_data('val.ids.headline', self.config.max_sentence_len, True)
 
 		train_input_batches = get_stacked_minibatches(train_input, self.config.batch_size)
         train_truth_batches = get_stacked_minibatches(train_truth, self.config.batch_size)
         train_mask_batches = get_stacked_minibatches(train_truth_mask, self.config.batch_size)
-        input_seq_len_batches = get_stacked_minibatches(train_input_len, self.config.batch_size)
-        label_seq_len_batches = get_stacked_minibatches(train_truth_len, self.config.batch_size)
+        train_input_seq_len_batches = get_stacked_minibatches(train_input_len, self.config.batch_size)
+        train_label_seq_len_batches = get_stacked_minibatches(train_truth_len, self.config.batch_size)
+
+        dev_input_batches = get_stacked_minibatches(dev_input, self.config.batch_size)
+        dev_truth_batches = get_stacked_minibatches(dev_truth, self.config.batch_size)
+        dev_mask_batches = get_stacked_minibatches(dev_truth_mask, self.config.batch_size)
+        dev_input_seq_len_batches = get_stacked_minibatches(dev_input_len, self.config.batch_size)
+        dev_label_seq_len_batches = get_stacked_minibatches(dev_truth_len, self.config.batch_size)
 
 
 		for epoch in range(self.config.n_epochs):
 			logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
-			dev_loss = self.run_epoch(sess, train_input_batches, train_truth_batches, train_mask_batch)
+			dev_loss = self.run_epoch(sess, (train_input_batches, train_truth_batches, train_mask_batches), \
+										(dev_input_batches, dev_truth_batches, dev_mask_batches))
 			if dev_loss < lowest_dev_loss:
 				lowest_dev_loss = dev_loss
 				if saver:
-					logger.info("New best score! Saving model in %s", self.config.model_output)
+					logger.info("New lowest loss! Saving model in %s", self.config.model_output)
 					saver.save(sess, self.config.model_output)
 			print("")
 			
@@ -324,7 +341,7 @@ class RNN(object):
 
 	# dev_loss is likely to be much higher than train_loss, since we're feeding in prev outputs (instead of ground truth)
 	# into the decoder
-    def compute_dev_loss(self, sess, inputs_batch, labels_batch, mask_batch):
+    def compute_dev_loss(self, sess, inputs_batches, labels_batches, mask_batches):
 	    """Compute dev loss for a single batch
 
 	    Args:
@@ -333,8 +350,10 @@ class RNN(object):
 	    Returns:
 	        predictions: np.ndarray of shape (n_samples, n_classes)
 	    """
-	    feed = self.create_feed_dict(inputs_batch, labels_batch, mask_batch)
-	    dev_loss = sess.run(self.dev_loss, feed_dict=feed)
+	    dev_loss = 0
+	    for i, input_batch in enumerate(inputs_batch):
+		    feed = self.create_feed_dict(input_batch, labels_batches[i], dev_mask[i])
+		    dev_loss += sess.run(self.dev_loss, feed_dict=feed)
     	return dev_loss
 
     def do_train(self):
