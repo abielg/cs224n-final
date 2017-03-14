@@ -144,7 +144,6 @@ class RNN(object):
 
         preds = tf.matmul(outputs, W) + b
 
-
 		"""
 		outputs: A a tensor shaped [batch_size, max_sentence_len, decoder_hidden_size]
 		containing the generated outputs
@@ -231,11 +230,13 @@ class RNN(object):
 	def tokenize_data(self, path, max_sentence_len, do_mask):
 		tokenized_data = []
 		masks = []
+		sequence_length = []
 		f = open('data/summarization/' + path,'r')
 		for line in f.readlines():
 			sentence = [int(x) for x in line.split()]
 			if len(sentence) > max_sentence_len:
 				continue
+			sequence_length.append(len(sentence))
 			if do_mask:
 				mask = [True] * len(sentence)
 				mask.extend([False] * (max_sentence_len - len(sentence)))
@@ -244,7 +245,7 @@ class RNN(object):
 			tokenized_data.append(sentence)
 		print("Tokenized " + path)
 		print(tokenized_data)
-		return tokenized_data, masks
+		return tokenized_data, masks, sequence_length
 
 	# 
 	def train_on_batch(self, sess, inputs_batch, labels_batch, mask_batch):
@@ -253,18 +254,11 @@ class RNN(object):
         return loss
 
 
-	def run_epoch(self, sess, train_data, dev_data):
+	def run_epoch(self, sess,  train_input_batches, train_truth_batches, train_mask_batch):
         prog = Progbar(target=1 + int(len(train_examples) / self.config.batch_size))
         
-        train_input, train_truth, train_mask = train_data
-        dev_input, dev_truth, dev_mask = dev_data
-
-        train_batches = get_stacked_minibatches(train_input, self.config.batch_size)
-        truth_batches = get_stacked_minibatches(train_truth, self.config.batch_size)
-        mask_batches = get_stacked_minibatches(train_mask, self.config.batch_size)
-
-        for i, input_batch in enumerate(train_batches):
-            loss = self.train_on_batch(sess, input_batch, truth_batches[i], mask_batches[i])
+        for i, input_batch in enumerate(train_input_batches):
+            loss = self.train_on_batch(sess, input_batch, train_truth_batches[i], train_mask_batch[i])
             prog.update(i + 1, [("train loss", loss)])
 
             if self.report: self.report.log_train_loss(loss)
@@ -276,22 +270,28 @@ class RNN(object):
         return dev_loss # TODO: to check where the return value is used
 
 	def fit(self, sess):
-		best_score = 0.
+		lowest_dev_loss = float("inf")
 
 		#train_examples = self.preprocess_sequence_data(train_examples_raw)
-		train_input_values, _ = tokenize_data('train.ids.sentence', self.config.max_sentence_len, False)
-		train_ground_truth, train_ground_truth_mask = tokenize_data('train.ids.headline', self.config.max_sentence_len, True)
+		train_input, _, train_input_len = tokenize_data('train.ids.sentence', self.config.max_sentence_len, False)
+		train_truth, train_truth_mask, train_truth_len = tokenize_data('train.ids.headline', self.config.max_sentence_len, True)
 
 		#dev_set = self.preprocess_sequence_data(dev_set_raw)
-		dev_input_values, _ = tokenize_data('val.ids.sentence', self.config.max_sentence_len, False)
-		dev_ground_truth, dev_ground_truth_mask = tokenize_data('val.ids.headline', self.config.max_sentence_len, True)
+		dev_input_values, _, dev_input_len = tokenize_data('val.ids.sentence', self.config.max_sentence_len, False)
+		dev_ground_truth, dev_ground_truth_mask, dev_truth_len = tokenize_data('val.ids.headline', self.config.max_sentence_len, True)
+
+		train_input_batches = get_stacked_minibatches(train_input, self.config.batch_size)
+        train_truth_batches = get_stacked_minibatches(train_truth, self.config.batch_size)
+        train_mask_batches = get_stacked_minibatches(train_truth_mask, self.config.batch_size)
+        input_seq_len_batches = get_stacked_minibatches(train_input_len, self.config.batch_size)
+        label_seq_len_batches = get_stacked_minibatches(train_truth_len, self.config.batch_size)
+
 
 		for epoch in range(self.config.n_epochs):
 			logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
-			score = self.run_epoch(sess, (train_input_values, train_ground_truth, train_ground_truth_mask), \
-									(dev_input_values, dev_ground_truth, dev_ground_truth_mask))
-			if score > best_score:
-				best_score = score
+			dev_loss = self.run_epoch(sess, train_input_batches, train_truth_batches, train_mask_batch)
+			if dev_loss < lowest_dev_loss:
+				lowest_dev_loss = dev_loss
 				if saver:
 					logger.info("New best score! Saving model in %s", self.config.model_output)
 					saver.save(sess, self.config.model_output)
@@ -301,7 +301,7 @@ class RNN(object):
 				self.report.log_epoch()
 				self.report.save()
 			
-		return best_score
+		return lowest_dev_loss
 
 	def output_predictions(self, preds):
 		output_file = open('dev_predictions', 'w')
