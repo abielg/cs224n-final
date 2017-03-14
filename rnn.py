@@ -37,15 +37,14 @@ class RNN(object):
 		loaded = np.load('data/summarization/glove.trimmed.50.npz'.format(self.config.embed_size))
 		self.embedding_matrix = loaded['glove']
 
-		if "output_path" in args:
+		if "output_path" in args: 
         	# Where to save things.
             self.output_path = args.output_path
         else:
             self.output_path = "results/{}/{:%Y%m%d_%H%M%S}/".format(self.cell, datetime.now())
-        self.model_output = self.output_path + "model.weights"
-        self.eval_output = self.output_path + "results.txt"
-    #    self.conll_output = self.output_path + "{}_predictions.conll".format(self.cell)
-        self.log_output = self.output_path + "log"
+        self.model_output = self.output_path + "model.weights" # save our trained parameters
+    #     self.eval_output = self.output_path + "results.txt" # will use this at test time
+        self.log_output = self.output_path + "log" # save logging
 
 	def add_placeholders(self):
 		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="x")
@@ -178,6 +177,18 @@ class RNN(object):
 
         return preds
 
+  	# Handles a single batch, returns the outputs
+	def add_pred_single_batch_train(self):
+		x_unstacked = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+		# TODO: change initialization of x. this placeholder cannot store a list of Tensors
+        # don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
+
+		# need to verify that this is initialized correctly
+		cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, feed_previous=False)
+
+		return tf.concat(outputs, 2)
+
 	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_test(self):
 		x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
@@ -295,7 +306,7 @@ class RNN(object):
 	def output_predictions(self, preds):
 		output_file = open('dev_predictions', 'w')
 		for i in range(tf.shape(preds)[0]):
-			index = tf.argmax(preds[i])\
+			index = tf.argmax(preds[i])
 
 
 	def build(self):
