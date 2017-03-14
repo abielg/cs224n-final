@@ -1,9 +1,14 @@
 import tensorflow as tf
 import numpy as np
+import logging
 
 PAD_ID = 0
 SOS_ID = 1
 UNK_ID = 2 
+
+logger = logging.getLogger("final_project")
+logger.setLevel(logging.DEBUG)
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 class Config(object):
 	"""Holds model hyperparams and data information.
@@ -31,6 +36,16 @@ class RNN(object):
 		self.config = config
 		loaded = np.load('data/summarization/glove.trimmed.50.npz'.format(self.config.embed_size))
 		self.embedding_matrix = loaded['glove']
+
+		if "output_path" in args:
+        	# Where to save things.
+            self.output_path = args.output_path
+        else:
+            self.output_path = "results/{}/{:%Y%m%d_%H%M%S}/".format(self.cell, datetime.now())
+        self.model_output = self.output_path + "model.weights"
+        self.eval_output = self.output_path + "results.txt"
+    #    self.conll_output = self.output_path + "{}_predictions.conll".format(self.cell)
+        self.log_output = self.output_path + "log"
 
 	def add_placeholders(self):
 		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="x")
@@ -106,9 +121,9 @@ class RNN(object):
     the headline are passed in as inputs to the decoder. At test time, the previous decoder output is passed
     into the next decoder cell's input. Function handles a single batch.
     """
-	def add_pred_single_batch_train(self):
-		x = self.encoder_inputs_placeholder # must be 3D tensor int32 Tensors of shape [batch_size, max_sentence_length, embed_size]
-		y = self.labels_placeholder_list # must be 1D list of int32 Tensors of shape [batch_size, max_sentence_length, embed_size]
+	def add_pred_single_batch_train2(self):
+		x = self.encoder_inputs_placeholder # float32 Tensor of shape [batch_size, max_sentence_length, embed_size]
+		y = self.labels_placeholder_list # int32 Tensor of shape [batch_size, max_sentence_length, embed_size]
 		encoder_sequence_length = # TODO: fill this in
 
 		fw_cell = tf.nn.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
@@ -135,6 +150,32 @@ class RNN(object):
 		containing the generated outputs
 		"""
 		return preds # list (word by word) of 2D tensors: [batch_size, max_sentence_len, vocab_size]
+
+
+	def add_pred_single_batch_test2(self):
+		x = self.encoder_inputs_placeholder # float32 Tensor of shape [batch_size, max_sentence_length, embed_size]
+		y = self.labels_placeholder_list # int32 Tensor of shape [batch_size, max_sentence_length, embed_size]
+		encoder_sequence_length = # TODO: fill this in
+
+		fw_cell = tf.nn.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		bckwd_cell = tf.nn.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+
+		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
+
+		outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fw_cell, bckwd_cell, x, sequence_length=encoder_sequence_length, dtype=tf.float32)
+		encoder_final_states = tf.concat(output_states, 2) # dimension: [batch_size x max_sentence_length x encoder_hidden_size * 2]
+
+		decoder_cell = tf.nn.rnn_cell.LSTMCell(self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+
+		decoder_sequence_length = 
+		outputs, state = tf.nn.dynamic_rnn(decoder_cell, y, sequence_length=decoder_sequence_length, initial_state=encoder_final_states)
+
+		W = tf.Variable("W", shape=[None, self.config.decoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
+        b = tf.Variable("b", shape=[None, self.config.max_sentence_len, self.config.vocab_size], initializer=tf.constant_initializer(0.0))
+
+        preds = tf.matmul(outputs, W) + b
+
+        return preds
 
 	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_test(self):
@@ -291,6 +332,13 @@ class RNN(object):
     	return dev_loss
 
     def do_train(self):
+
+   		# allows filehandler to write to the file specified by log_output
+    	handler = logging.FileHandler(self.config.log_output)
+    	handler.setLevel(logging.DEBUG)
+    	handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
+    	logging.getLogger().addHandler(handler)
+
 		with tf.Graph().as_default():
 			logger.info("Building model...",)
 			start = time.time()
@@ -310,8 +358,8 @@ class RNN(object):
 				predictions = [[LBLS[l] for l in preds] for preds in predictions]
 				output = zip(sentences, labels, predictions)
 
-				with open(model.config.conll_output, 'w') as f:
-					write_conll(f, output)
+			#	with open(model.config.conll_output, 'w') as f:
+			#		write_conll(f, output)
 				with open(model.config.eval_output, 'w') as f:
 					for sentence, labels, predictions in output:
 						print_sentence(f, sentence, labels, predictions)
