@@ -182,6 +182,7 @@ class RNN(object):
 		# TODO: change initialization of x. this placeholder cannot store a list of Tensors
         # don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
 
+
 		# need to verify that this is initialized correctly
 		cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, feed_previous=False)
