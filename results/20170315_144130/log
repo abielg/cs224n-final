@@ -1,0 +1,32 @@
+2017-03-15 14:41:30,616:INFO: Building model...
+2017-03-15 14:41:45,424:INFO: took 14.81 seconds
+2017-03-15 14:41:49,558:INFO: Epoch 1 out of 10
+2017-03-15 14:41:50,308:INFO: Evaluating on development data
+2017-03-15 14:41:50,501:INFO: Epoch #1 dev loss: 6
+2017-03-15 14:41:50,502:INFO: Epoch 2 out of 10
+2017-03-15 14:41:50,653:INFO: Evaluating on development data
+2017-03-15 14:41:50,690:INFO: Epoch #2 dev loss: 6
+2017-03-15 14:41:50,691:INFO: Epoch 3 out of 10
+2017-03-15 14:41:50,857:INFO: Evaluating on development data
+2017-03-15 14:41:50,914:INFO: Epoch #3 dev loss: 6
+2017-03-15 14:41:50,914:INFO: Epoch 4 out of 10
+2017-03-15 14:41:51,071:INFO: Evaluating on development data
+2017-03-15 14:41:51,121:INFO: Epoch #4 dev loss: 6
+2017-03-15 14:41:51,121:INFO: Epoch 5 out of 10
+2017-03-15 14:41:51,270:INFO: Evaluating on development data
+2017-03-15 14:41:51,324:INFO: Epoch #5 dev loss: 6
+2017-03-15 14:41:51,324:INFO: Epoch 6 out of 10
+2017-03-15 14:41:51,480:INFO: Evaluating on development data
+2017-03-15 14:41:51,535:INFO: Epoch #6 dev loss: 6
+2017-03-15 14:41:51,535:INFO: Epoch 7 out of 10
+2017-03-15 14:41:51,690:INFO: Evaluating on development data
+2017-03-15 14:41:51,742:INFO: Epoch #7 dev loss: 6
+2017-03-15 14:41:51,742:INFO: Epoch 8 out of 10
+2017-03-15 14:41:51,887:INFO: Evaluating on development data
+2017-03-15 14:41:51,940:INFO: Epoch #8 dev loss: 6
+2017-03-15 14:41:51,941:INFO: Epoch 9 out of 10
+2017-03-15 14:41:52,089:INFO: Evaluating on development data
+2017-03-15 14:41:52,140:INFO: Epoch #9 dev loss: 6
+2017-03-15 14:41:52,141:INFO: Epoch 10 out of 10
+2017-03-15 14:41:52,296:INFO: Evaluating on development data
+2017-03-15 14:41:52,344:INFO: Epoch #10 dev loss: 6
