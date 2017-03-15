@@ -439,6 +439,7 @@ def do_test():
 
 		with tf.Session() as session:
 			session.run(init)
+			saver.restore(session, rnn.config.model_output) # TODO: read up on this. should restore old params
 			# get saved parameters
 
 			# get outputs on data
