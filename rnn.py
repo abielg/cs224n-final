@@ -2,6 +2,8 @@ import tensorflow as tf
 import numpy as np
 import logging
 from datetime import datetime
+import os
+import time
 
 PAD_ID = 0
 SOS_ID = 1
@@ -34,6 +36,7 @@ class Config(object):
 
 	def __init__(self):
 		self.output_path = "results/{:%Y%m%d_%H%M%S}/".format(datetime.now())
+		os.makedirs(self.output_path)
 		self.model_output = self.output_path + "model.weights"
 		self.log_output = self.output_path + "log"
 
@@ -172,8 +175,8 @@ class RNN(object):
 		#decoder_sequence_length = 
 		outputs, state = tf.nn.dynamic_rnn(decoder_cell, y, sequence_length=decoder_sequence_length, initial_state=encoder_final_states)
 
-		W = tf.Variable("W", shape=[None, self.config.decoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
-		b = tf.Variable("b", shape=[None, self.config.max_sentence_len, self.config.vocab_size], initializer=tf.constant_initializer(0.0))
+		W = tf.get_variable("W", shape=[None, self.config.decoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
+		b = tf.get_variable("b", shape=[None, self.config.max_sentence_len, self.config.vocab_size], initializer=tf.constant_initializer(0.0))
 
 		preds = tf.matmul(outputs, W) + b
 
@@ -187,8 +190,8 @@ class RNN(object):
 		# don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
 
 		# used encoder hidden size for output projection since this model uses a unidirectional LSTM encoder
-		W = tf.Variable("W", shape=[self.config.encoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
-		b = tf.Variable("b", shape=[self.config.vocab_size], initializer=tf.constant_initializer(0.0))
+		W = tf.get_variable("W", shape=[self.config.encoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
+		b = tf.get_variable("b", shape=[self.config.vocab_size], initializer=tf.constant_initializer(0.0))
 
 		output_proj_vars = (W, b)
 
