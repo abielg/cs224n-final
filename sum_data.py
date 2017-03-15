@@ -149,10 +149,10 @@ if __name__ == '__main__':
     valid_path = pjoin(args.source_dir, "val")
 
     create_vocabulary(vocab_path,
-                      [pjoin(args.source_dir, "train.headline"),
-                       pjoin(args.source_dir, "train.sentence"),
-                       pjoin(args.source_dir, "val.headline"),
-                       pjoin(args.source_dir, "val.sentence")])
+                      [pjoin(args.source_dir, "train.title"),
+                       pjoin(args.source_dir, "train.article"),
+                       pjoin(args.source_dir, "val.title"),
+                       pjoin(args.source_dir, "val.article")])
     vocab, rev_vocab = initialize_vocabulary(pjoin(args.vocab_dir, "vocab.dat"))
 
     # ======== Trim Distributed Word Representation =======
@@ -166,12 +166,12 @@ if __name__ == '__main__':
     # You should change the below code
 
 
-    x_train_dis_path = train_path + ".ids.sentence"
-    y_train_ids_path = train_path + ".ids.headline"
-    data_to_token_ids(train_path + ".sentence", x_train_dis_path, vocab_path)
-    data_to_token_ids(train_path + ".headline", y_train_ids_path, vocab_path)
+    x_train_dis_path = train_path + ".ids.article"
+    y_train_ids_path = train_path + ".ids.title"
+    data_to_token_ids(train_path + ".article", x_train_dis_path, vocab_path)
+    data_to_token_ids(train_path + ".title", y_train_ids_path, vocab_path)
 
-    x_dis_path = valid_path + ".ids.sentence"
-    y_ids_path = valid_path + ".ids.headline"
-    data_to_token_ids(valid_path + ".sentence", x_dis_path, vocab_path)
-    data_to_token_ids(valid_path + ".headline", y_ids_path, vocab_path)
+    x_dis_path = valid_path + ".ids.article"
+    y_ids_path = valid_path + ".ids.title"
+    data_to_token_ids(valid_path + ".article", x_dis_path, vocab_path)
+    data_to_token_ids(valid_path + ".title", y_ids_path, vocab_path)
