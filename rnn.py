@@ -188,8 +188,6 @@ class RNN(object):
 	def add_pred_single_batch_train(self):
 		x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
 		y = self.stacked_labels_placeholder
-		# TODO: might need to change x. unsure whether or not a placeholder can store a list of tensors
-		# don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
 
 		# used encoder hidden size for output projection since this model uses a unidirectional LSTM encoder
 		W = tf.get_variable("W", shape=[self.config.encoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
@@ -198,20 +196,9 @@ class RNN(object):
 		output_proj_vars = (W, b)
 
 		x = tf.unstack(x, axis=0) # converts x into a list of tensors (list has max_sentence_len elems, each a tensor of shape [batch_size])
-	#	print(x)
-	#	x = [[1, 2, 3], [1, 2, 3], [1, 2, 3]]
-
-	#	x1 = tf.zeros([self.config.batch_size], tf.int32)
-	#	x2 = tf.zeros([self.config.batch_size], tf.int32)
-	#	x3 = tf.zeros([self.config.batch_size], tf.int32)
-
-	#	x = [x1, x2, x3] # temporary (otherwise, we get the message: Tensor object is not iterable)
-	#	print(x)
 
 		y = tf.unstack(y, axis=0)
-	#	y = [x1, x2, x3] # temporary (otherwise, get same error message as above)
 
-		# need to verify that this is initialized correctly
 		lstm_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, \
 			initializer=tf.contrib.layers.xavier_initializer())
 		preds, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(encoder_inputs=x, \
@@ -225,16 +212,21 @@ class RNN(object):
 		return preds, W, b
 
 	# Handles a single batch, returns the outputs
-	def add_pred_single_batch_test(self):
+	def add_pred_single_batch_test(self, W, b):
 		x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
-		# TODO: change initialization of x. this placeholder cannot store a list of Tensors
+		x = tf.unstack(x, axis=0) # converts x into a list of tensors (list has max_sentence_len elems, each a tensor of shape [batch_size])
+
 		# don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
+		output_proj_vars = (W, b)
 
-		# need to verify that this is initialized correctly
-		cell = tf.contrib.rnn.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, self.config.vocab_size, self.config.vocab_size, self.config.embed_size, feed_previous=True)
-
-		return tf.concat(outputs, 2)
+		lstm_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, \
+			initializer=tf.contrib.layers.xavier_initializer())
+		preds, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(encoder_inputs=x, \
+			decoder_inputs=x, cell=lstm_cell, num_encoder_symbols=self.config.vocab_size, \
+			num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
+			output_projection=output_proj_vars, \
+			feed_previous=True, dtype=tf.float32)
+		return preds
 
 	# assumes we already have padding implemented.
 
@@ -242,23 +234,23 @@ class RNN(object):
 	def add_loss_op(self, preds, W, b): # W and b refer to the weights and biases of the output projection matrix
 
 		"""
+		W: [encoder_hidden_size x vocab_size]
+		b: [vocab_size]
 		preds: [batch_size x max_sent_length x vocab_size]
 		labels: [batch_size x max_sentence_length] (IDs. either convert self.stacked_labels_placeholder, or save original input)
 
 		"""
 		#labels = # need to fill this in with rank 2 tensor with words as ID numbers. can save in config
-	#	unstacked_preds = # add unstacking function for predictions
 
-		print("labels: ")
-		print(self.unstacked_labels_placeholder)
+		projected_preds = [tf.matmul(pred, W) + b for pred in preds] # list, max_sentence_length long, of tensors: [batch_size x vocab_size]
+		projected_preds = tf.stack(projected_preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
+		print("projected preds shape:")
+		print(projected_preds.get_shape())
 
-		print("\npredictions:")
-		print(preds)
-		print("yadadamean?\n")
-		preds = tf.stack(preds, axis=1) # new shape: [batch_size, max_sentence_length, encoder_hidden_size]
-		print(preds)
+		print("labels shape:")
+		print(self.unstacked_labels_placeholder.get_shape())
 
-		ce = tf.nn.sparse_softmax_cross_entropy_with_logits(self.unstacked_labels_placeholder, preds)
+		ce = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.unstacked_labels_placeholder, logits=projected_preds)
 		# shape of ce: same as labels, with same type as preds [batch_size x max_sentence_length]
 		ce = tf.boolean_mask(ce, self.mask_placeholder)
 		loss = tf.reduce_mean(ce)
@@ -373,8 +365,8 @@ class RNN(object):
 		self.train_loss = self.add_loss_op(self.train_pred, W, b) # W and b refer to the weights and biases of the output projection matrix
 		self.train_op = self.add_training_op(self.train_loss)
 
-		self.dev_pred = self.add_pred_single_batch_test()
-		output_predictions(self.dev_pred)
+		self.dev_pred = self.add_pred_single_batch_test(W, b)
+	#	output_predictions(self.dev_pred)
 		self.dev_loss = self.add_loss_op(self.dev_pred)
 
 
