@@ -53,19 +53,19 @@ class RNN(object):
 		self.build() # called in init, just like is done in hw. unsure whether or not we can use a class function here
 
 	def add_placeholders(self):
-		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]), name="x")
-		self.unstacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.batch_size, self.config.max_sentence_len]), name="y")
-		self.stacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, None]), name="y_stacked")
+		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]), name="bitch")
+	#	self.unstacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.batch_size, self.config.max_sentence_len]))
+		self.stacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]), name="fuck")
 		# still not sure that we need the 1's above
-		self.mask_placeholder = tf.placeholder(tf.bool, shape=([self.config.batch_size, self.config.max_sentence_len])) # batch_sz x max_sentence_length
+		self.mask_placeholder = tf.placeholder(tf.bool, shape=([self.config.batch_size, self.config.max_sentence_len]), name="poonani") # batch_sz x max_sentence_length
 		#SWITHCED TYPE OF THE PLACEHOLDERS FROM FLOAT TO INT
 
 	def create_feed_dict(self, inputs_batch, unstacked_labels_batch=None, stacked_labels_batch=None, mask_batch=None):
 		feed_dict = {
 			self.encoder_inputs_placeholder: inputs_batch,
 		}
-		if unstacked_labels_batch is not None:
-			feed_dict[self.unstacked_labels_placeholder] = unstacked_labels_batch
+#		if unstacked_labels_batch is not None:
+#			feed_dict[self.unstacked_labels_placeholder] = unstacked_labels_batch
 
 		if stacked_labels_batch is not None:
 			feed_dict[self.stacked_labels_placeholder] = stacked_labels_batch
@@ -183,9 +183,6 @@ class RNN(object):
 				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
 				output_projection=output_proj_vars, feed_previous=False, dtype=tf.float32)
 
-			print("shape of preds returned by legacy:")
-			print(preds[0].get_shape())
-
 		return preds, W, b
 
 	# Handles a single batch, returns the outputs
@@ -223,13 +220,10 @@ class RNN(object):
 
 		projected_preds = [tf.matmul(pred, W) + b for pred in preds] # list, max_sentence_length long, of tensors: [batch_size x vocab_size]
 		projected_preds = tf.stack(projected_preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
-		print("projected preds shape:")
-		print(projected_preds.get_shape())
 
-		print("labels shape:")
-		print(self.unstacked_labels_placeholder.get_shape())
+		unstacked_labels = tf.transpose(self.stacked_labels_placeholder) # shape: [batch_size x max_sentence_len]
 
-		ce = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.unstacked_labels_placeholder, logits=projected_preds)
+		ce = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=unstacked_labels, logits=projected_preds)
 		# shape of ce: same as labels, with same type as preds [batch_size x max_sentence_length]
 		ce = tf.boolean_mask(ce, self.mask_placeholder)
 		loss = tf.reduce_mean(ce)
@@ -247,28 +241,50 @@ class RNN(object):
 
 	# 
 	def train_on_batch(self, sess, inputs_batch, labels_batch, mask_batch):
-		feed = self.create_feed_dict(inputs_batch, \
+		feed = self.create_feed_dict(inputs_batch=inputs_batch, \
 			stacked_labels_batch=labels_batch, \
 			mask_batch=mask_batch) # bug: mask_batch passed in has shape [max_sentence_length(20) x batch_size(3)], when it should be the opposite
 		_, loss = sess.run([self.train_op, self.train_loss], feed_dict=feed)
 		return loss
 
 
-	def run_epoch(self, sess,  train_data, dev_data):
-		prog = Progbar(target=1 + int(len(train_data) / self.config.batch_size))
+	# dev_loss is likely to be much higher than train_loss, since we're feeding in prev outputs (instead of ground truth)
+	# into the decoder
+	def compute_dev_loss(self, sess, input_batches, labels_batches, mask_batches):
+		"""Compute dev loss for a single batch
 
+		Args:
+			sess: tf.Session()
+			input_batch: np.ndarray of shape (n_samples, n_features)
+		Returns:
+			predictions: np.ndarray of shape (n_samples, n_classes)
+		"""
+		prog = Progbar(target=1 + int(len(input_batches) / self.config.batch_size))
+		total_dev_loss = 0
+		for i, input_batch in enumerate(input_batches):
+			feed = self.create_feed_dict(inputs_batch=input_batch, stacked_labels_batch=labels_batches[i], mask_batch=mask_batches[i]) #problem: labels has shape: [batch_size x max_sentence_length], should be opposite
+			dev_loss = sess.run(self.dev_loss, feed_dict=feed)
+			total_dev_loss += dev_loss
+			prog.update(i + 1, [("dev loss", dev_loss)])
+		return total_dev_loss
+
+
+	def run_epoch(self, sess,  train_data, dev_data):
 		train_input_batches, train_truth_batches, train_mask_batches = train_data
 		dev_input_batches, dev_truth_batches, dev_mask_batches = dev_data
+
+		prog = Progbar(target=1 + int(len(train_input_batches) / self.config.batch_size))
+
 
 		for i, input_batch in enumerate(train_input_batches):
 			loss = self.train_on_batch(sess, input_batch, train_truth_batches[i], train_mask_batches[i])
 			prog.update(i + 1, [("train loss", loss)])
 
-			if self.report: self.report.log_train_loss(loss)
-		print("")
+		#	if self.report: self.report.log_train_loss(loss)
+		#print("")
 
 		logger.info("Evaluating on development data")
-		dev_loss = self.compute_dev_loss(sess, dev_input, dev_truth, dev_mask) # print loss on dev set
+		dev_loss = self.compute_dev_loss(sess, dev_input_batches, dev_truth_batches, dev_mask_batches) # print loss on dev set
 
 		return dev_loss # TODO: to check where the return value is used
 
@@ -285,13 +301,13 @@ class RNN(object):
 
 		train_input_batches = get_stacked_minibatches(train_input, self.config.batch_size)
 		train_truth_batches = get_stacked_minibatches(train_truth, self.config.batch_size)
-		train_mask_batches = get_stacked_minibatches(train_truth_mask, self.config.batch_size)
+		train_mask_batches = get_reg_minibatches(train_truth_mask, self.config.batch_size) # shape: [max_sentence_length x batch_size], but it should be the opposite
 	#	train_input_seq_len_batches = get_stacked_minibatches(train_input_len, self.config.batch_size)
 	#	train_label_seq_len_batches = get_stacked_minibatches(train_truth_len, self.config.batch_size)
 
 		dev_input_batches = get_stacked_minibatches(dev_input, self.config.batch_size)
 		dev_truth_batches = get_stacked_minibatches(dev_truth, self.config.batch_size)
-		dev_mask_batches = get_stacked_minibatches(dev_truth_mask, self.config.batch_size)
+		dev_mask_batches = get_reg_minibatches(dev_truth_mask, self.config.batch_size)
 	#	dev_input_seq_len_batches = get_stacked_minibatches(dev_input_len, self.config.batch_size)
 	#	dev_label_seq_len_batches = get_stacked_minibatches(dev_truth_len, self.config.batch_size)
 
@@ -300,16 +316,17 @@ class RNN(object):
 			logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
 			dev_loss = self.run_epoch(sess, (train_input_batches, train_truth_batches, train_mask_batches), \
 										(dev_input_batches, dev_truth_batches, dev_mask_batches))
+			logger.info("Epoch #%d dev loss: %d", epoch + 1, dev_loss)
 			if dev_loss < lowest_dev_loss:
 				lowest_dev_loss = dev_loss
 				if saver:
 					logger.info("New lowest loss! Saving model in %s", self.config.model_output)
-					saver.save(sess, self.config.model_output)
+					saver.save(sess, self.config.model_output) # saves parameters for best-performing model (lowest total dev loss)
 			print("")
 			
-			if self.report:
-				self.report.log_epoch()
-				self.report.save()
+	#		if self.report:
+	#			self.report.log_epoch()
+	#			self.report.save()
 			
 		return lowest_dev_loss
 
@@ -329,25 +346,6 @@ class RNN(object):
 	#	output_predictions(self.dev_pred)
 		self.dev_loss = self.add_loss_op(self.dev_pred, W, b)
 
-
-	## Elliott's most recent additions
-
-	# dev_loss is likely to be much higher than train_loss, since we're feeding in prev outputs (instead of ground truth)
-	# into the decoder
-	def compute_dev_loss(self, sess, inputs_batches, labels_batches, mask_batches):
-		"""Compute dev loss for a single batch
-
-		Args:
-			sess: tf.Session()
-			input_batch: np.ndarray of shape (n_samples, n_features)
-		Returns:
-			predictions: np.ndarray of shape (n_samples, n_classes)
-		"""
-		dev_loss = 0
-		for i, input_batch in enumerate(inputs_batch):
-			feed = self.create_feed_dict(input_batch, labels_batches[i], dev_mask[i])
-			dev_loss += sess.run(self.dev_loss, feed_dict=feed)
-		return dev_loss
 
 '''
 returns a list with lists containing the first words of all sentences, then the second words, then
@@ -394,7 +392,6 @@ def tokenize_data(path, max_sentence_len, do_mask):
 		sentence.extend([PAD_ID] * (max_sentence_len - len(sentence)))
 		tokenized_data.append(sentence)
 	print("Tokenized " + path)
-	print(tokenized_data)
 	return tokenized_data, masks, sequence_length
 
 def do_train():
@@ -437,50 +434,4 @@ if __name__ == '__main__':
 	do_train()
 
 
-	'''	
-	rnn.add_placeholders()
-	rnn.create_feed_dict(input, ground_truth)
-	rnn.encoder_decoder()
-	'''
 
-#GROUND TRUTH = HEADLINE
-#INPUT = SENTENCE
-
-
-
-'''
-	def encoder(self):
-		fwd_cell = tf.nn.tf.contrib.rnn.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		bckwd_cell = tf.nn.tf.contrib.rnn.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		x = self.inputs_placeholder
-		outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fwd_cell, bckwd_cell, x)
-		return tf.concat(output_states, 2)
-
-	def decoder(self, first_state):
-		x = self.inputs_placeholder
-		lstm_cell = tf.nn.tf.contrib.rnn.LSTMCell(decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		
-		tf.nn.seq2seq.attention_decoder(x, )
-
-		tf.nn.dynamic_rnn(lstm_cell, x, initial_state=first_state)
-'''
-
-
-
-
-'''
-def prepare_data():
-	path = "data/summarization/"
-	data_files = [path + "train.ids.headline", path + "train.ids.summary"]
-	queue = tf.train.string_input_producer(data_files, num_epochs=10)  		
-	reader = tf.TextLineReader()
-	key, value = reader.read(queue)
-	tensor = tf.decode_raw(value, tf.int32)
-	
-
-
-	with tf.Session() as sess:
-		sess.run(tf.global_variables_initializer())
-		coord = tf.train.Coordinator()
-		threads = tf.train.start_queue_runners(coord=coord)
-'''
