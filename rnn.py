@@ -5,6 +5,8 @@ from datetime import datetime
 import os
 import time
 
+from tensorflow.contrib import rnn
+
 PAD_ID = 0
 SOS_ID = 1
 UNK_ID = 2 
@@ -49,7 +51,7 @@ class RNN(object):
 
 	def add_placeholders(self):
 		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]), name="x")
-		self.unstacked_labels_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len]), name="y")
+		self.unstacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.batch_size, self.config.max_sentence_len]), name="y")
 		self.stacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, None]), name="y_stacked")
 		# still not sure that we need the 1's above
 		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len])) # batch_sz x max_sentence_length
@@ -131,8 +133,8 @@ class RNN(object):
 		y = self.stacked_labels_placeholder_list # int32 Tensor of shape [batch_size, max_sentence_length, embed_size]
 		#encoder_sequence_length = # TODO: fill this in
 
-		fw_cell = tf.contrib.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		bckwd_cell = tf.contrib.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		fw_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		bckwd_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 
 		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
 
@@ -140,7 +142,7 @@ class RNN(object):
 		outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fw_cell, bckwd_cell, x, sequence_length=encoder_sequence_length, dtype=tf.float32)
 		encoder_final_states = tf.concat(output_states, 2) # dimension: [batch_size x max_sentence_length x encoder_hidden_size * 2]
 
-		decoder_cell = tf.contrib.rnn_cell.LSTMCell(self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		decoder_cell = tf.contrib.rnn.LSTMCell(self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 
 		#decoder_sequence_length = 
 		outputs, state = tf.nn.dynamic_rnn(decoder_cell, y, sequence_length=decoder_sequence_length, initial_state=encoder_final_states)
@@ -162,15 +164,15 @@ class RNN(object):
 		y = self.stacked_labels_placeholder_list # int32 Tensor of shape [batch_size, max_sentence_length, embed_size]
 		#encoder_sequence_length = # TODO: fill this in
 
-		fw_cell = tf.contrib.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		bckwd_cell = tf.contrib.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		fw_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		bckwd_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 
 		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
 
 		outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fw_cell, bckwd_cell, x, sequence_length=encoder_sequence_length, dtype=tf.float32)
 		encoder_final_states = tf.concat(output_states, 2) # dimension: [batch_size x max_sentence_length x encoder_hidden_size * 2]
 
-		decoder_cell = tf.contrib.rnn_cell.LSTMCell(self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		decoder_cell = tf.contrib.rnn.LSTMCell(self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 
 		#decoder_sequence_length = 
 		outputs, state = tf.nn.dynamic_rnn(decoder_cell, y, sequence_length=decoder_sequence_length, initial_state=encoder_final_states)
@@ -195,11 +197,32 @@ class RNN(object):
 
 		output_proj_vars = (W, b)
 
-		# need to verify that this is initialized correctly
-		cell = tf.contrib.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		preds, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, output_proj_vars, feed_previous=False)
+		x = tf.unstack(x, axis=0) # converts x into a list of tensors (list has max_sentence_len elems, each a tensor of shape [batch_size])
+	#	print(x)
+	#	x = [[1, 2, 3], [1, 2, 3], [1, 2, 3]]
 
-		return preds
+	#	x1 = tf.zeros([self.config.batch_size], tf.int32)
+	#	x2 = tf.zeros([self.config.batch_size], tf.int32)
+	#	x3 = tf.zeros([self.config.batch_size], tf.int32)
+
+	#	x = [x1, x2, x3] # temporary (otherwise, we get the message: Tensor object is not iterable)
+	#	print(x)
+
+		y = tf.unstack(y, axis=0)
+	#	y = [x1, x2, x3] # temporary (otherwise, get same error message as above)
+
+		# need to verify that this is initialized correctly
+		lstm_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, \
+			initializer=tf.contrib.layers.xavier_initializer())
+		preds, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(encoder_inputs=x, \
+			decoder_inputs=y, cell=lstm_cell, num_encoder_symbols=self.config.vocab_size, \
+			num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
+			output_projection=output_proj_vars, feed_previous=False, dtype=tf.float32)
+
+		print("shape of preds returned by legacy:")
+		print(preds[0].get_shape())
+
+		return preds, W, b
 
 	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_test(self):
@@ -208,15 +231,15 @@ class RNN(object):
 		# don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
 
 		# need to verify that this is initialized correctly
-		cell = tf.contrib.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, feed_previous=True)
+		cell = tf.contrib.rnn.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, self.config.vocab_size, self.config.vocab_size, self.config.embed_size, feed_previous=True)
 
 		return tf.concat(outputs, 2)
 
 	# assumes we already have padding implemented.
 
 
-	def add_loss_op(self, preds):
+	def add_loss_op(self, preds, W, b): # W and b refer to the weights and biases of the output projection matrix
 
 		"""
 		preds: [batch_size x max_sent_length x vocab_size]
@@ -224,12 +247,16 @@ class RNN(object):
 
 		"""
 		#labels = # need to fill this in with rank 2 tensor with words as ID numbers. can save in config
-		unstacked_preds = '''
+	#	unstacked_preds = # add unstacking function for predictions
 
+		print("labels: ")
+		print(self.unstacked_labels_placeholder)
 
-		ADD UNSTACKING FUNCTION
-
-		'''
+		print("\npredictions:")
+		print(preds)
+		print("yadadamean?\n")
+		preds = tf.stack(preds, axis=1) # new shape: [batch_size, max_sentence_length, encoder_hidden_size]
+		print(preds)
 
 		ce = tf.nn.sparse_softmax_cross_entropy_with_logits(self.unstacked_labels_placeholder, preds)
 		# shape of ce: same as labels, with same type as preds [batch_size x max_sentence_length]
@@ -342,8 +369,8 @@ class RNN(object):
 
 	def build(self):
 		self.add_placeholders()
-		self.train_pred = self.add_pred_single_batch_train() # train_pred is stacked list (# elems = max_sent_length) of tensors: [batch_size x vocab_size]
-		self.train_loss = self.add_loss_op(self.train_pred)
+		self.train_pred, W, b = self.add_pred_single_batch_train() # train_pred is stacked list (# elems = max_sent_length) of tensors: [batch_size x vocab_size]
+		self.train_loss = self.add_loss_op(self.train_pred, W, b) # W and b refer to the weights and biases of the output projection matrix
 		self.train_op = self.add_training_op(self.train_loss)
 
 		self.dev_pred = self.add_pred_single_batch_test()
@@ -423,15 +450,15 @@ if __name__ == '__main__':
 
 '''
 	def encoder(self):
-		fwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		bckwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		fwd_cell = tf.nn.tf.contrib.rnn.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		bckwd_cell = tf.nn.tf.contrib.rnn.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 		x = self.inputs_placeholder
 		outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fwd_cell, bckwd_cell, x)
 		return tf.concat(output_states, 2)
 
 	def decoder(self, first_state):
 		x = self.inputs_placeholder
-		lstm_cell = tf.nn.rnn_cell.LSTMCell(decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		lstm_cell = tf.nn.tf.contrib.rnn.LSTMCell(decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 		
 		tf.nn.seq2seq.attention_decoder(x, )
 
