@@ -204,7 +204,7 @@ class RNN(object):
 		preds, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(encoder_inputs=x, \
 			decoder_inputs=y, cell=lstm_cell, num_encoder_symbols=self.config.vocab_size, \
 			num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
-			output_projection=output_proj_vars, feed_previous=False, dtype=tf.float32)
+			output_projection=output_proj_vars, feed_previous=False, dtype=tf.float32, scope="train")
 
 		print("shape of preds returned by legacy:")
 		print(preds[0].get_shape())
@@ -225,7 +225,7 @@ class RNN(object):
 			decoder_inputs=x, cell=lstm_cell, num_encoder_symbols=self.config.vocab_size, \
 			num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
 			output_projection=output_proj_vars, \
-			feed_previous=True, dtype=tf.float32)
+			feed_previous=True, dtype=tf.float32, scope="test")
 		return preds
 
 	# assumes we already have padding implemented.
