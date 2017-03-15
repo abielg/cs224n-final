@@ -50,27 +50,22 @@ class RNN(object):
 		self.config = config
 		loaded = np.load('data/summarization/glove.trimmed.50.npz'.format(self.config.embed_size))
 		self.embedding_matrix = loaded['glove']
-		self.build() # called in init, just like is done in hw. unsure whether or not we can use a class function here
+		self.build()
 
 	def add_placeholders(self):
-		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]), name="bitch")
-	#	self.unstacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.batch_size, self.config.max_sentence_len]))
-		self.stacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]), name="fuck")
-		# still not sure that we need the 1's above
-		self.mask_placeholder = tf.placeholder(tf.bool, shape=([self.config.batch_size, self.config.max_sentence_len]), name="poonani") # batch_sz x max_sentence_length
-		#SWITHCED TYPE OF THE PLACEHOLDERS FROM FLOAT TO INT
+		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]))
+		self.stacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]))
+		self.mask_placeholder = tf.placeholder(tf.bool, shape=([self.config.batch_size, self.config.max_sentence_len])) # batch_sz x max_sentence_length
 
 	def create_feed_dict(self, inputs_batch, unstacked_labels_batch=None, stacked_labels_batch=None, mask_batch=None):
 		feed_dict = {
 			self.encoder_inputs_placeholder: inputs_batch,
 		}
-#		if unstacked_labels_batch is not None:
-#			feed_dict[self.unstacked_labels_placeholder] = unstacked_labels_batch
 
 		if stacked_labels_batch is not None:
 			feed_dict[self.stacked_labels_placeholder] = stacked_labels_batch
 
-		if mask_batch is not None: # TODO: create mask_batch using ground truth
+		if mask_batch is not None:
 			feed_dict[self.mask_placeholder] = mask_batch
 		return feed_dict
 
@@ -97,7 +92,7 @@ class RNN(object):
 		return embeddings
 		
 
-	""" ELLIOTTS ADDITIONS
+	"""
 	We need two different functions for training and testing. At training time, the word vectors representing
 	the headline are passed in as inputs to the decoder. At test time, the previous decoder output is passed
 	into the next decoder cell's input. Function handles a single batch.
@@ -291,26 +286,20 @@ class RNN(object):
 	def fit(self, sess, saver):
 		lowest_dev_loss = float("inf")
 
-		#train_examples = self.preprocess_sequence_data(train_examples_raw)
 		train_input, _, train_input_len = tokenize_data('train.ids.sentence', self.config.max_sentence_len, False)
 		train_truth, train_truth_mask, train_truth_len = tokenize_data('train.ids.headline', self.config.max_sentence_len, True)
 
-		#dev_set = self.preprocess_sequence_data(dev_set_raw)
 		dev_input, _, dev_input_len = tokenize_data('val.ids.sentence', self.config.max_sentence_len, False)
 		dev_truth, dev_truth_mask, dev_truth_len = tokenize_data('val.ids.headline', self.config.max_sentence_len, True)
 
 		train_input_batches = get_stacked_minibatches(train_input, self.config.batch_size)
 		train_truth_batches = get_stacked_minibatches(train_truth, self.config.batch_size)
 		train_mask_batches = get_reg_minibatches(train_truth_mask, self.config.batch_size) # shape: [max_sentence_length x batch_size], but it should be the opposite
-	#	train_input_seq_len_batches = get_stacked_minibatches(train_input_len, self.config.batch_size)
-	#	train_label_seq_len_batches = get_stacked_minibatches(train_truth_len, self.config.batch_size)
+
 
 		dev_input_batches = get_stacked_minibatches(dev_input, self.config.batch_size)
 		dev_truth_batches = get_stacked_minibatches(dev_truth, self.config.batch_size)
 		dev_mask_batches = get_reg_minibatches(dev_truth_mask, self.config.batch_size)
-	#	dev_input_seq_len_batches = get_stacked_minibatches(dev_input_len, self.config.batch_size)
-	#	dev_label_seq_len_batches = get_stacked_minibatches(dev_truth_len, self.config.batch_size)
-
 
 		for epoch in range(self.config.n_epochs):
 			logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
@@ -411,11 +400,11 @@ def do_train():
 
 		init = tf.global_variables_initializer() # saves an op to initialize variables
 
-		saver = None
+		saver = tf.train.Saver() # adds ops to save and restore variables to and from checkpoints
 
 		with tf.Session() as session:
 			session.run(init)
-			rnn.fit(session, saver) # TODO: add spot for saver in fit. also need to pass in data to fit
+			rnn.fit(session, saver)
 			print("finished")
 			# Save predictions in a text file.
 	# 		output = model.output(session, dev_raw)
@@ -429,6 +418,30 @@ def do_train():
 		#		for sentence, labels, predictions in output:
 		#			print_sentence(f, sentence, labels, predictions)
 
+def do_test():
+
+	# allows filehandler to write to the file specified by log_output
+	config = Config()
+	handler = logging.FileHandler(config.log_output)
+	handler.setLevel(logging.DEBUG)
+	handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
+	logging.getLogger().addHandler(handler)
+
+	with tf.Graph().as_default():
+		logger.info("Building model...",)
+		start = time.time()			
+		rnn = RNN(config)
+		logger.info("took %.2f seconds", time.time() - start)
+
+		init = tf.global_variables_initializer() # saves an op to initialize variables
+
+		saver = tf.train.Saver()
+
+		with tf.Session() as session:
+			session.run(init)
+			# get saved parameters
+
+			# get outputs on data
 
 if __name__ == '__main__':
 	do_train()
