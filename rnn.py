@@ -48,12 +48,14 @@ class RNN(object):
 
 		self.build()
 
+        self.build() # called in init, just like is done in hw. unsure whether or not we can use a class function here
+
 	def add_placeholders(self):
 		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]), name="x")
 		self.unstacked_labels_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len]), name="y")
 		self.stacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, None]), name="y_stacked")
 		# still not sure that we need the 1's above
-		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len]))
+		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len])) # batch_sz x max_sentence_length
 		#SWITHCED TYPE OF THE PLACEHOLDERS FROM FLOAT TO INT
 
 	def create_feed_dict(self, inputs_batch, unstacked_labels_batch=None, stacked_labels_batch=None, mask_batch=None):
@@ -294,7 +296,7 @@ class RNN(object):
 
 		return dev_loss # TODO: to check where the return value is used
 
-	def fit(self, sess):
+	def fit(self, sess, saver):
 		lowest_dev_loss = float("inf")
 
 		#train_examples = self.preprocess_sequence_data(train_examples_raw)
@@ -365,45 +367,46 @@ class RNN(object):
 	    Returns:
 	        predictions: np.ndarray of shape (n_samples, n_classes)
 	    """
-		dev_loss = 0
-		for i, input_batch in enumerate(inputs_batch):
-			feed = self.create_feed_dict(input_batch, labels_batches[i], dev_mask[i])
-			dev_loss += sess.run(self.dev_loss, feed_dict=feed)
-		return dev_loss
+	    dev_loss = 0
+	    for i, input_batch in enumerate(inputs_batch):
+		    feed = self.create_feed_dict(input_batch, labels_batches[i], dev_mask[i])
+		    dev_loss += sess.run(self.dev_loss, feed_dict=feed)
+    	return dev_loss
 
-def do_train():
-	config = Config()
-#	rnn = RNN(config)
+    def do_train(self):
 
-		# allows filehandler to write to the file specified by log_output
-	handler = logging.FileHandler(self.config.log_output)
-	handler.setLevel(logging.DEBUG)
-	handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
-	logging.getLogger().addHandler(handler)
+   		# allows filehandler to write to the file specified by log_output
+    	handler = logging.FileHandler(self.config.log_output)
+    	handler.setLevel(logging.DEBUG)
+    	handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
+    	logging.getLogger().addHandler(handler)
 
-	with tf.Graph().as_default():
-		logger.info("Building model...",)
-		start = time.time()
-		rnn = RNN(config)
-		logger.info("took %.2f seconds", time.time() - start)
+		with tf.Graph().as_default():
+			logger.info("Building model...",)
+			start = time.time()
+			config = Config()
+			rnn = RNN(config)
+			logger.info("took %.2f seconds", time.time() - start)
 
-		init = tf.global_variables_initializer()
+			init = tf.global_variables_initializer() # saves an op to initialize variables
 
-		with tf.Session() as session:
-			session.run(init)
-			lowest_loss = model.fit(session)
+			saver = None
 
-			# Save predictions in a text file.
-			output = model.output(session, dev_raw)
-			sentences, labels, predictions = zip(*output)
-			predictions = [[LBLS[l] for l in preds] for preds in predictions]
-			output = zip(sentences, labels, predictions)
+			with tf.Session() as session:
+				session.run(init)
+				model.fit(session, saver) # TODO: add spot for saver in fit. also need to pass in data to fit
 
-		#	with open(model.config.conll_output, 'w') as f:
-		#		write_conll(f, output)
-			with open(model.config.eval_output, 'w') as f:
-				for sentence, labels, predictions in output:
-					print_sentence(f, sentence, labels, predictions)
+				# Save predictions in a text file.
+		# 		output = model.output(session, dev_raw)
+		#		sentences, labels, predictions = zip(*output)
+		#		predictions = [[LBLS[l] for l in preds] for preds in predictions]
+		#		output = zip(sentences, labels, predictions)
+
+			#	with open(model.config.conll_output, 'w') as f:
+			#		write_conll(f, output)
+				with open(model.config.eval_output, 'w') as f:
+					for sentence, labels, predictions in output:
+						print_sentence(f, sentence, labels, predictions)
 
 
 if __name__ == '__main__':
