@@ -378,7 +378,7 @@ class RNN(object):
 
 			with tf.Session() as session:
 				session.run(init)
-				model.fit(session, saver) # TODO: add spot for saver in fit. also need to pass in data to fit
+				model.fit(session, saver)
 
 				# Save predictions in a text file.
 		# 		output = model.output(session, dev_raw)
@@ -388,9 +388,9 @@ class RNN(object):
 
 			#	with open(model.config.conll_output, 'w') as f:
 			#		write_conll(f, output)
-				with open(model.config.eval_output, 'w') as f:
-					for sentence, labels, predictions in output:
-						print_sentence(f, sentence, labels, predictions)
+			#	with open(model.config.eval_output, 'w') as f:
+			#		for sentence, labels, predictions in output:
+			#			print_sentence(f, sentence, labels, predictions)
 
 
 if __name__ == '__main__':
