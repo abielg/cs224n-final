@@ -1,6 +1,9 @@
 import tensorflow as tf
 import numpy as np
 import logging
+from datetime import datetime
+import os
+import time
 
 PAD_ID = 0
 SOS_ID = 1
@@ -13,12 +16,12 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 class Config(object):
 	"""Holds model hyperparams and data information.
 
-    The config class is used to store various hyperparameters and dataset
-    information parameters. Model objects are passed a Config() object at
-    instantiation.
+	The config class is used to store various hyperparameters and dataset
+	information parameters. Model objects are passed a Config() object at
+	instantiation.
 
-    CHECK WHICH VALUES WE ACTUALLY NEED AND MODIFY THEM
-    """
+	CHECK WHICH VALUES WE ACTUALLY NEED AND MODIFY THEM
+	"""
 	n_features = 36
 	n_classes = 3
 	dropout = 0.5
@@ -31,24 +34,18 @@ class Config(object):
 	max_sentence_len = 20
 	vocab_size = 1000
 
+	def __init__(self):
+		self.output_path = "results/{:%Y%m%d_%H%M%S}/".format(datetime.now())
+		os.makedirs(self.output_path)
+		self.model_output = self.output_path + "model.weights"
+		self.log_output = self.output_path + "log"
+
 class RNN(object):
 	def __init__(self, config):
 		self.config = config
 		loaded = np.load('data/summarization/glove.trimmed.50.npz'.format(self.config.embed_size))
 		self.embedding_matrix = loaded['glove']
-
-		if "output_path" in args: 
-			# Where to save things.
-			self.output_path = args.output_path
-		else:
-			self.output_path = "results/{}/{:%Y%m%d_%H%M%S}/".format(self.cell, datetime.now())
-		self.model_output = self.output_path + "model.weights" # save our trained parameters
-		#     self.eval_output = self.output_path + "results.txt" # will use this at test time
-		self.log_output = self.output_path + "log" # save logging
-
-		self.build()
-
-        self.build() # called in init, just like is done in hw. unsure whether or not we can use a class function here
+		self.build() # called in init, just like is done in hw. unsure whether or not we can use a class function here
 
 	def add_placeholders(self):
 		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]), name="x")
@@ -74,18 +71,18 @@ class RNN(object):
 
 
 	def add_embedding(self):
-	   	"""Adds an embedding layer that maps from input tokens (integers) to vectors and then
-	    concatenates those vectors:
+		"""Adds an embedding layer that maps from input tokens (integers) to vectors and then
+		concatenates those vectors:
 
-            - Create an embedding tensor and initialize it with self.pretrained_embeddings.
-            - Use the input_placeholder to index into the embeddings tensor, resulting in a
-              tensor of shape (None, max_length, n_features, embed_size).
-            - Concatenates the embeddings by reshaping the embeddings tensor to shape
-              (None, max_length, n_features * embed_size).
+			- Create an embedding tensor and initialize it with self.pretrained_embeddings.
+			- Use the input_placeholder to index into the embeddings tensor, resulting in a
+			  tensor of shape (None, max_length, n_features, embed_size).
+			- Concatenates the embeddings by reshaping the embeddings tensor to shape
+			  (None, max_length, n_features * embed_size).
 
-        Returns:
-            embeddings: tf.Tensor of shape (None, max_length, embed_size)
-        """
+		Returns:
+			embeddings: tf.Tensor of shape (None, max_length, embed_size)
+		"""
 		### YOUR CODE HERE (~4-6 lines)
 		embedding_tensor = tf.Variable(self.embedding_matrix)
 		lookup_tensor = tf.nn.embedding_lookup(embedding_tensor, self.inputs_placeholder)
@@ -93,7 +90,7 @@ class RNN(object):
 		print("Created embeddings tensor for the input")
 		### END YOUR CODE
 		return embeddings
-        
+		
 	'''
 	returns a list with lists containing the first words of all sentences, then the second words, then
 	the third words, etc. [[a1, b1, c1], [a2, b2, c2], [a3, b3, c3]] for sentences [a1, a2, a3], [b1, b2, b3] etc
@@ -124,10 +121,10 @@ class RNN(object):
 
 
 	""" ELLIOTTS ADDITIONS
-    We need two different functions for training and testing. At training time, the word vectors representing
-    the headline are passed in as inputs to the decoder. At test time, the previous decoder output is passed
-    into the next decoder cell's input. Function handles a single batch.
-    """
+	We need two different functions for training and testing. At training time, the word vectors representing
+	the headline are passed in as inputs to the decoder. At test time, the previous decoder output is passed
+	into the next decoder cell's input. Function handles a single batch.
+	"""
 
 	def add_pred_single_batch_train2(self):
 		x = self.encoder_inputs_placeholder # float32 Tensor of shape [batch_size, max_sentence_length, embed_size]
@@ -178,14 +175,14 @@ class RNN(object):
 		#decoder_sequence_length = 
 		outputs, state = tf.nn.dynamic_rnn(decoder_cell, y, sequence_length=decoder_sequence_length, initial_state=encoder_final_states)
 
-		W = tf.Variable("W", shape=[None, self.config.decoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
-		b = tf.Variable("b", shape=[None, self.config.max_sentence_len, self.config.vocab_size], initializer=tf.constant_initializer(0.0))
+		W = tf.get_variable("W", shape=[None, self.config.decoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
+		b = tf.get_variable("b", shape=[None, self.config.max_sentence_len, self.config.vocab_size], initializer=tf.constant_initializer(0.0))
 
 		preds = tf.matmul(outputs, W) + b
 
 		return preds
 
-  	# Handles a single batch, returns the outputs
+	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_train(self):
 		x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
 		y = self.stacked_labels_placeholder
@@ -193,8 +190,8 @@ class RNN(object):
 		# don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
 
 		# used encoder hidden size for output projection since this model uses a unidirectional LSTM encoder
-		W = tf.Variable("W", shape=[self.config.encoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
-		b = tf.Variable("b", shape=[self.config.vocab_size], initializer=tf.constant_initializer(0.0))
+		W = tf.get_variable("W", shape=[self.config.encoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
+		b = tf.get_variable("b", shape=[self.config.vocab_size], initializer=tf.constant_initializer(0.0))
 
 		output_proj_vars = (W, b)
 
@@ -208,7 +205,7 @@ class RNN(object):
 	def add_pred_single_batch_test(self):
 		x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
 		# TODO: change initialization of x. this placeholder cannot store a list of Tensors
-        # don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
+		# don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
 
 		# need to verify that this is initialized correctly
 		cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
@@ -361,52 +358,52 @@ class RNN(object):
 	def compute_dev_loss(self, sess, inputs_batches, labels_batches, mask_batches):
 		"""Compute dev loss for a single batch
 
-	    Args:
-	        sess: tf.Session()
-	        input_batch: np.ndarray of shape (n_samples, n_features)
-	    Returns:
-	        predictions: np.ndarray of shape (n_samples, n_classes)
-	    """
-	    dev_loss = 0
-	    for i, input_batch in enumerate(inputs_batch):
-		    feed = self.create_feed_dict(input_batch, labels_batches[i], dev_mask[i])
-		    dev_loss += sess.run(self.dev_loss, feed_dict=feed)
-    	return dev_loss
+		Args:
+			sess: tf.Session()
+			input_batch: np.ndarray of shape (n_samples, n_features)
+		Returns:
+			predictions: np.ndarray of shape (n_samples, n_classes)
+		"""
+		dev_loss = 0
+		for i, input_batch in enumerate(inputs_batch):
+			feed = self.create_feed_dict(input_batch, labels_batches[i], dev_mask[i])
+			dev_loss += sess.run(self.dev_loss, feed_dict=feed)
+		return dev_loss
 
-    def do_train(self):
+def do_train():
 
-   		# allows filehandler to write to the file specified by log_output
-    	handler = logging.FileHandler(self.config.log_output)
-    	handler.setLevel(logging.DEBUG)
-    	handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
-    	logging.getLogger().addHandler(handler)
+	# allows filehandler to write to the file specified by log_output
+	config = Config()
+	handler = logging.FileHandler(config.log_output)
+	handler.setLevel(logging.DEBUG)
+	handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
+	logging.getLogger().addHandler(handler)
 
-		with tf.Graph().as_default():
-			logger.info("Building model...",)
-			start = time.time()
-			config = Config()
-			rnn = RNN(config)
-			logger.info("took %.2f seconds", time.time() - start)
+	with tf.Graph().as_default():
+		logger.info("Building model...",)
+		start = time.time()			
+		rnn = RNN(config)
+		logger.info("took %.2f seconds", time.time() - start)
 
-			init = tf.global_variables_initializer() # saves an op to initialize variables
+		init = tf.global_variables_initializer() # saves an op to initialize variables
 
-			saver = None
+		saver = None
 
-			with tf.Session() as session:
-				session.run(init)
-				model.fit(session, saver)
+		with tf.Session() as session:
+			session.run(init)
+			model.fit(session, saver) # TODO: add spot for saver in fit. also need to pass in data to fit
 
-				# Save predictions in a text file.
-		# 		output = model.output(session, dev_raw)
-		#		sentences, labels, predictions = zip(*output)
-		#		predictions = [[LBLS[l] for l in preds] for preds in predictions]
-		#		output = zip(sentences, labels, predictions)
+			# Save predictions in a text file.
+	# 		output = model.output(session, dev_raw)
+	#		sentences, labels, predictions = zip(*output)
+	#		predictions = [[LBLS[l] for l in preds] for preds in predictions]
+	#		output = zip(sentences, labels, predictions)
 
-			#	with open(model.config.conll_output, 'w') as f:
-			#		write_conll(f, output)
-			#	with open(model.config.eval_output, 'w') as f:
-			#		for sentence, labels, predictions in output:
-			#			print_sentence(f, sentence, labels, predictions)
+		#	with open(model.config.conll_output, 'w') as f:
+		#		write_conll(f, output)
+			with open(model.config.eval_output, 'w') as f:
+				for sentence, labels, predictions in output:
+					print_sentence(f, sentence, labels, predictions)
 
 
 if __name__ == '__main__':
@@ -425,20 +422,20 @@ if __name__ == '__main__':
 
 
 '''
-    def encoder(self):
-    	fwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-    	bckwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-    	x = self.inputs_placeholder
-    	outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fwd_cell, bckwd_cell, x)
-    	return tf.concat(output_states, 2)
+	def encoder(self):
+		fwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		bckwd_cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		x = self.inputs_placeholder
+		outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fwd_cell, bckwd_cell, x)
+		return tf.concat(output_states, 2)
 
-   	def decoder(self, first_state):
-   		x = self.inputs_placeholder
-   		lstm_cell = tf.nn.rnn_cell.LSTMCell(decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-   		
-   		tf.nn.seq2seq.attention_decoder(x, )
+	def decoder(self, first_state):
+		x = self.inputs_placeholder
+		lstm_cell = tf.nn.rnn_cell.LSTMCell(decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		
+		tf.nn.seq2seq.attention_decoder(x, )
 
-   		tf.nn.dynamic_rnn(lstm_cell, x, initial_state=first_state)
+		tf.nn.dynamic_rnn(lstm_cell, x, initial_state=first_state)
 '''
 
 
@@ -458,5 +455,5 @@ def prepare_data():
 	with tf.Session() as sess:
 		sess.run(tf.global_variables_initializer())
 		coord = tf.train.Coordinator()
-  		threads = tf.train.start_queue_runners(coord=coord)
+		threads = tf.train.start_queue_runners(coord=coord)
 '''
