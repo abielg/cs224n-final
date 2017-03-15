@@ -131,8 +131,8 @@ class RNN(object):
 		y = self.stacked_labels_placeholder_list # int32 Tensor of shape [batch_size, max_sentence_length, embed_size]
 		#encoder_sequence_length = # TODO: fill this in
 
-		fw_cell = tf.nn.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		bckwd_cell = tf.nn.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		fw_cell = tf.contrib.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		bckwd_cell = tf.contrib.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 
 		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
 
@@ -140,7 +140,7 @@ class RNN(object):
 		outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fw_cell, bckwd_cell, x, sequence_length=encoder_sequence_length, dtype=tf.float32)
 		encoder_final_states = tf.concat(output_states, 2) # dimension: [batch_size x max_sentence_length x encoder_hidden_size * 2]
 
-		decoder_cell = tf.nn.rnn_cell.LSTMCell(self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		decoder_cell = tf.contrib.rnn_cell.LSTMCell(self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 
 		#decoder_sequence_length = 
 		outputs, state = tf.nn.dynamic_rnn(decoder_cell, y, sequence_length=decoder_sequence_length, initial_state=encoder_final_states)
@@ -162,15 +162,15 @@ class RNN(object):
 		y = self.stacked_labels_placeholder_list # int32 Tensor of shape [batch_size, max_sentence_length, embed_size]
 		#encoder_sequence_length = # TODO: fill this in
 
-		fw_cell = tf.nn.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		bckwd_cell = tf.nn.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		fw_cell = tf.contrib.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		bckwd_cell = tf.contrib.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 
 		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
 
 		outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fw_cell, bckwd_cell, x, sequence_length=encoder_sequence_length, dtype=tf.float32)
 		encoder_final_states = tf.concat(output_states, 2) # dimension: [batch_size x max_sentence_length x encoder_hidden_size * 2]
 
-		decoder_cell = tf.nn.rnn_cell.LSTMCell(self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		decoder_cell = tf.contrib.rnn_cell.LSTMCell(self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 
 		#decoder_sequence_length = 
 		outputs, state = tf.nn.dynamic_rnn(decoder_cell, y, sequence_length=decoder_sequence_length, initial_state=encoder_final_states)
@@ -196,7 +196,7 @@ class RNN(object):
 		output_proj_vars = (W, b)
 
 		# need to verify that this is initialized correctly
-		cell = tf.nn.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		cell = tf.contrib.rnn_cell.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 		preds, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, output_proj_vars, feed_previous=False)
 
 		return preds
@@ -208,7 +208,7 @@ class RNN(object):
 		# don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
 
 		# need to verify that this is initialized correctly
-		cell = tf.nn.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		cell = tf.contrib.rnn_cell.LSTMCell(encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 		outputs, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(x, y, cell, vocab_size, vocab_size, embed_size, feed_previous=True)
 
 		return tf.concat(outputs, 2)
