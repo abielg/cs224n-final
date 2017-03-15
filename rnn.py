@@ -168,7 +168,6 @@ class RNN(object):
 			output_proj_vars = (W, b)
 
 			x = tf.unstack(x, axis=0) # converts x into a list of tensors (list has max_sentence_len elems, each a tensor of shape [batch_size])
-
 			y = tf.unstack(y, axis=0)
 
 			lstm_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, \
@@ -182,7 +181,6 @@ class RNN(object):
 
 	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_test(self, W, b):
-
 		with tf.variable_scope(tf.get_variable_scope(), reuse=True):
 			x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
 			x = tf.unstack(x, axis=0) # converts x into a list of tensors (list has max_sentence_len elems, each a tensor of shape [batch_size])
@@ -286,11 +284,11 @@ class RNN(object):
 	def fit(self, sess, saver):
 		lowest_dev_loss = float("inf")
 
-		train_input, _, train_input_len = tokenize_data('train.ids.sentence', self.config.max_sentence_len, False)
-		train_truth, train_truth_mask, train_truth_len = tokenize_data('train.ids.headline', self.config.max_sentence_len, True)
+		train_input, _, train_input_len = tokenize_data('train.ids.article', self.config.max_sentence_len, False)
+		train_truth, train_truth_mask, train_truth_len = tokenize_data('train.ids.title', self.config.max_sentence_len, True)
 
-		dev_input, _, dev_input_len = tokenize_data('val.ids.sentence', self.config.max_sentence_len, False)
-		dev_truth, dev_truth_mask, dev_truth_len = tokenize_data('val.ids.headline', self.config.max_sentence_len, True)
+		dev_input, _, dev_input_len = tokenize_data('val.ids.article', self.config.max_sentence_len, False)
+		dev_truth, dev_truth_mask, dev_truth_len = tokenize_data('val.ids.title', self.config.max_sentence_len, True)
 
 		train_input_batches = get_stacked_minibatches(train_input, self.config.batch_size)
 		train_truth_batches = get_stacked_minibatches(train_truth, self.config.batch_size)
