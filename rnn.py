@@ -1,9 +1,12 @@
+
+
 import tensorflow as tf
 import numpy as np
 import logging
 from datetime import datetime
 import os
 import time
+from util import Progbar
 
 from tensorflow.contrib import rnn
 
@@ -54,12 +57,12 @@ class RNN(object):
 		self.unstacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.batch_size, self.config.max_sentence_len]), name="y")
 		self.stacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, None]), name="y_stacked")
 		# still not sure that we need the 1's above
-		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len])) # batch_sz x max_sentence_length
+		self.mask_placeholder = tf.placeholder(tf.bool, shape=([self.config.batch_size, self.config.max_sentence_len])) # batch_sz x max_sentence_length
 		#SWITHCED TYPE OF THE PLACEHOLDERS FROM FLOAT TO INT
 
 	def create_feed_dict(self, inputs_batch, unstacked_labels_batch=None, stacked_labels_batch=None, mask_batch=None):
 		feed_dict = {
-			self.inputs_placeholder: inputs_batch,
+			self.encoder_inputs_placeholder: inputs_batch,
 		}
 		if unstacked_labels_batch is not None:
 			feed_dict[self.unstacked_labels_placeholder] = unstacked_labels_batch
@@ -93,34 +96,6 @@ class RNN(object):
 		### END YOUR CODE
 		return embeddings
 		
-	'''
-	returns a list with lists containing the first words of all sentences, then the second words, then
-	the third words, etc. [[a1, b1, c1], [a2, b2, c2], [a3, b3, c3]] for sentences [a1, a2, a3], [b1, b2, b3] etc
-	'''
-	def get_stacked_minibatches(self, tokenized_data, batch_size):
-		batches = []
-		prev_val = 0
-		for step in xrange(batch_size, len(tokenized_data) + batch_size, batch_size):
-			batch = tokenized_data[prev_val:step]
-			prev_val = step
-			batches.append( np.stack(batch, axis=1) )
-		return batches
-
-	def get_reg_minibatches(self, tokenized_data, batch_size):
-		batches = []
-		prev_val = 0
-		for step in xrange(batch_size, len(tokenized_data) + batch_size, batch_size):
-			batches.append( tokenized_data[prev_val:step] )
-			prev_val = step
-		return batches
-
-	def test_stacked_minibatches():
-		data = [[1,2,3,4], [1,2,3,4], [1,2,3,4]]
-		result = get_minibatches(data, 2)
-		assert result == [[[1,1],[2,2],[3,3],[4,4]],[[1],[2],[3],[4]]]
-		print("minibatches function is correct")
-
-
 
 	""" ELLIOTTS ADDITIONS
 	We need two different functions for training and testing. At training time, the word vectors representing
@@ -266,36 +241,17 @@ class RNN(object):
 
 		return train_op
 
-	#Returns a list of sentences, which in turn are lists of integers that represent words
-	def tokenize_data(self, path, max_sentence_len, do_mask):
-		tokenized_data = []
-		masks = []
-		sequence_length = []
-		f = open('data/summarization/' + path,'r')
-		for line in f.readlines():
-			sentence = [int(x) for x in line.split()]
-			if len(sentence) > max_sentence_len:
-				continue
-			sequence_length.append(len(sentence))
-			if do_mask:
-				mask = [True] * len(sentence)
-				mask.extend([False] * (max_sentence_len - len(sentence)))
-				masks.append(mask)
-			sentence.extend([PAD_ID] * (max_sentence_len - len(sentence)))
-			tokenized_data.append(sentence)
-		print("Tokenized " + path)
-		print(tokenized_data)
-		return tokenized_data, masks, sequence_length
-
 	# 
 	def train_on_batch(self, sess, inputs_batch, labels_batch, mask_batch):
-		feed = self.create_feed_dict(inputs_batch, labels_batch=labels_batch, mask_batch=mask_batch)
+		feed = self.create_feed_dict(inputs_batch, \
+			stacked_labels_batch=labels_batch, \
+			mask_batch=mask_batch) # bug: mask_batch passed in has shape [max_sentence_length x batch_size], when it should be the opposite
 		_, loss = sess.run([self.train_op, self.train_loss], feed_dict=feed)
 		return loss
 
 
 	def run_epoch(self, sess,  train_data, dev_data):
-		prog = Progbar(target=1 + int(len(train_examples) / self.config.batch_size))
+		prog = Progbar(target=1 + int(len(train_data) / self.config.batch_size))
 
 		train_input_batches, train_truth_batches, train_mask_batches = train_data
 		dev_input_batches, dev_truth_batches, dev_mask_batches = dev_data
@@ -326,14 +282,14 @@ class RNN(object):
 		train_input_batches = get_stacked_minibatches(train_input, self.config.batch_size)
 		train_truth_batches = get_stacked_minibatches(train_truth, self.config.batch_size)
 		train_mask_batches = get_stacked_minibatches(train_truth_mask, self.config.batch_size)
-		train_input_seq_len_batches = get_stacked_minibatches(train_input_len, self.config.batch_size)
-		train_label_seq_len_batches = get_stacked_minibatches(train_truth_len, self.config.batch_size)
+	#	train_input_seq_len_batches = get_stacked_minibatches(train_input_len, self.config.batch_size)
+	#	train_label_seq_len_batches = get_stacked_minibatches(train_truth_len, self.config.batch_size)
 
 		dev_input_batches = get_stacked_minibatches(dev_input, self.config.batch_size)
 		dev_truth_batches = get_stacked_minibatches(dev_truth, self.config.batch_size)
 		dev_mask_batches = get_stacked_minibatches(dev_truth_mask, self.config.batch_size)
-		dev_input_seq_len_batches = get_stacked_minibatches(dev_input_len, self.config.batch_size)
-		dev_label_seq_len_batches = get_stacked_minibatches(dev_truth_len, self.config.batch_size)
+	#	dev_input_seq_len_batches = get_stacked_minibatches(dev_input_len, self.config.batch_size)
+	#	dev_label_seq_len_batches = get_stacked_minibatches(dev_truth_len, self.config.batch_size)
 
 
 		for epoch in range(self.config.n_epochs):
@@ -367,7 +323,7 @@ class RNN(object):
 
 		self.dev_pred = self.add_pred_single_batch_test(W, b)
 	#	output_predictions(self.dev_pred)
-		self.dev_loss = self.add_loss_op(self.dev_pred)
+		self.dev_loss = self.add_loss_op(self.dev_pred, W, b)
 
 
 	## Elliott's most recent additions
@@ -388,6 +344,54 @@ class RNN(object):
 			feed = self.create_feed_dict(input_batch, labels_batches[i], dev_mask[i])
 			dev_loss += sess.run(self.dev_loss, feed_dict=feed)
 		return dev_loss
+
+'''
+returns a list with lists containing the first words of all sentences, then the second words, then
+the third words, etc. [[a1, b1, c1], [a2, b2, c2], [a3, b3, c3]] for sentences [a1, a2, a3], [b1, b2, b3] etc
+'''
+def get_stacked_minibatches(tokenized_data, batch_size):
+	batches = []
+	prev_val = 0
+	for step in xrange(batch_size, len(tokenized_data) + batch_size, batch_size):
+		batch = tokenized_data[prev_val:step]
+		prev_val = step
+		batches.append( np.stack(batch, axis=1) )
+	return batches
+
+def get_reg_minibatches(tokenized_data, batch_size):
+	batches = []
+	prev_val = 0
+	for step in xrange(batch_size, len(tokenized_data) + batch_size, batch_size):
+		batches.append( tokenized_data[prev_val:step] )
+		prev_val = step
+	return batches
+
+def test_stacked_minibatches():
+	data = [[1,2,3,4], [1,2,3,4], [1,2,3,4]]
+	result = get_minibatches(data, 2)
+	assert result == [[[1,1],[2,2],[3,3],[4,4]],[[1],[2],[3],[4]]]
+	print("minibatches function is correct")
+
+#Returns a list of sentences, which in turn are lists of integers that represent words
+def tokenize_data(path, max_sentence_len, do_mask):
+	tokenized_data = []
+	masks = []
+	sequence_length = []
+	f = open('data/summarization/' + path,'r')
+	for line in f.readlines():
+		sentence = [int(x) for x in line.split()]
+		if len(sentence) > max_sentence_len:
+			continue
+		sequence_length.append(len(sentence))
+		if do_mask:
+			mask = [True] * len(sentence)
+			mask.extend([False] * (max_sentence_len - len(sentence)))
+			masks.append(mask)
+		sentence.extend([PAD_ID] * (max_sentence_len - len(sentence)))
+		tokenized_data.append(sentence)
+	print("Tokenized " + path)
+	print(tokenized_data)
+	return tokenized_data, masks, sequence_length
 
 def do_train():
 
@@ -410,8 +414,8 @@ def do_train():
 
 		with tf.Session() as session:
 			session.run(init)
-			model.fit(session, saver) # TODO: add spot for saver in fit. also need to pass in data to fit
-
+			rnn.fit(session, saver) # TODO: add spot for saver in fit. also need to pass in data to fit
+			print("finished")
 			# Save predictions in a text file.
 	# 		output = model.output(session, dev_raw)
 	#		sentences, labels, predictions = zip(*output)
@@ -420,9 +424,9 @@ def do_train():
 
 		#	with open(model.config.conll_output, 'w') as f:
 		#		write_conll(f, output)
-			with open(model.config.eval_output, 'w') as f:
-				for sentence, labels, predictions in output:
-					print_sentence(f, sentence, labels, predictions)
+		#	with open(model.config.eval_output, 'w') as f:
+		#		for sentence, labels, predictions in output:
+		#			print_sentence(f, sentence, labels, predictions)
 
 
 if __name__ == '__main__':
