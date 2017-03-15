@@ -46,11 +46,13 @@ class RNN(object):
     #     self.eval_output = self.output_path + "results.txt" # will use this at test time
         self.log_output = self.output_path + "log" # save logging
 
+        self.build() # called in init, just like is done in hw. unsure whether or not we can use a class function here
+
 	def add_placeholders(self):
 		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]), name="x")
 		self.labels_placeholder = tf.placeholder(tf.int32, shape=([None, self.config.max_sentence_len, 1]), name="y")
 		# still not sure that we need the 1's above
-		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len]))
+		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len])) # batch_sz x max_sentence_length
 		#SWITHCED TYPE OF THE PLACEHOLDERS FROM FLOAT TO INT
 
 	def create_feed_dict(self, inputs_batch, labels_batch=None, mask_batch=None):
@@ -278,7 +280,7 @@ class RNN(object):
 
         return dev_loss # TODO: to check where the return value is used
 
-	def fit(self, sess):
+	def fit(self, sess, saver):
 		lowest_dev_loss = float("inf")
 
 		#train_examples = self.preprocess_sequence_data(train_examples_raw)
@@ -370,17 +372,19 @@ class RNN(object):
 			rnn = RNN(config)
 			logger.info("took %.2f seconds", time.time() - start)
 
-			init = tf.global_variables_initializer()
+			init = tf.global_variables_initializer() # saves an op to initialize variables
+
+			saver = None
 
 			with tf.Session() as session:
 				session.run(init)
-				model.fit(session)
+				model.fit(session, saver) # TODO: add spot for saver in fit. also need to pass in data to fit
 
 				# Save predictions in a text file.
-				output = model.output(session, dev_raw)
-				sentences, labels, predictions = zip(*output)
-				predictions = [[LBLS[l] for l in preds] for preds in predictions]
-				output = zip(sentences, labels, predictions)
+		# 		output = model.output(session, dev_raw)
+		#		sentences, labels, predictions = zip(*output)
+		#		predictions = [[LBLS[l] for l in preds] for preds in predictions]
+		#		output = zip(sentences, labels, predictions)
 
 			#	with open(model.config.conll_output, 'w') as f:
 			#		write_conll(f, output)
