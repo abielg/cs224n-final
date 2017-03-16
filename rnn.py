@@ -10,6 +10,8 @@ from util import Progbar
 import argparse
 
 from tensorflow.contrib import rnn
+from tensorflow.python.platform import gfile
+
 
 PAD_ID = 0
 SOS_ID = 1
@@ -45,7 +47,7 @@ class Config(object):
 		os.makedirs(self.output_path)
 		self.model_output = self.output_path + "model.weights"
 		self.log_output = self.output_path + "log"
-		self.vocabulary = init_vocab()
+		self.vocabulary = self.init_vocab()
 
 	def init_vocab(self):
 		vocab_path = 'data/summarization/vocab.dat'
@@ -496,14 +498,14 @@ if __name__ == '__main__':
 	command_parser = subparsers.add_parser('train', help='')
 	command_parser.set_defaults(func=do_train)
 
-    command_parser = subparsers.add_parser('test', help='')
-    command_parser.add_argument('-p', '--saved-params', type=argparse.FileType('r'), help="Saved params to use when testing")
-    command_parser.set_defaults(func=do_test)
+	command_parser = subparsers.add_parser('test', help='')
+	command_parser.add_argument('-p', '--saved-params', type=argparse.FileType('r'), help="Saved params to use when testing")
+	command_parser.set_defaults(func=do_test)
 
-    ARGS = parser.parse_args()
-    if ARGS.func is None:
-        parser.print_help()
-        sys.exit(1)
-    else:
-        ARGS.func(ARGS)
+	ARGS = parser.parse_args()
+	if ARGS.func is None:
+		parser.print_help()
+		sys.exit(1)
+	else:
+		ARGS.func(ARGS)
 
