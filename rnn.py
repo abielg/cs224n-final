@@ -219,6 +219,7 @@ class RNN(object):
 	# assumes we already have padding implemented.
 
 	def save_outputs(self, inputs, titles, preds): # shape of each input: [batch_size x max_sentence_length]
+		logger.info("save_outputs function was called")
 		inputs_list = tf.unstack(inputs, num=self.config.batch_size) # batch_size elems, each a tensor: [max_sentence_len]
 		titles_list = tf.unstack(titles, num=self.config.batch_size)
 		preds_list =tf.unstack(preds, num=self.config.batch_size)
@@ -296,7 +297,7 @@ class RNN(object):
 			mask_batch=mask_batch)
 		preds, loss = sess.run([self.test_pred, self.test_loss]) # need to format/save predictions
 
-
+		print("PREDICT ON BATCH CALLED")
 		if self.save_predictions == True:
 			x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
 			x = tf.unstack(x, axis=0)
