@@ -49,6 +49,7 @@ class Config(object):
 		self.model_output = self.output_path + "model.weights"
 		self.log_output = self.output_path + "log"
 		self.vocabulary = self.init_vocab()
+		self.preds_output = self.output_path + "preds"
 
 	def init_vocab(self):
 		vocab_path = 'data/summarization/vocab.dat'
@@ -209,6 +210,14 @@ class RNN(object):
 				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
 				output_projection=output_proj_vars, \
 				feed_previous=True, dtype=tf.float32)
+
+			argmax_preds = tf.argmax(preds, axis=2)
+			preds_list = tf.unpack(argmax_preds)
+			for sentence in preds_list:
+				for index in tf.unpack(sentence):
+					output_to_file self.config.vocabulary[index]
+
+
 		return preds
 
 	# assumes we already have padding implemented.
@@ -273,7 +282,7 @@ class RNN(object):
 		Returns:
 			predictions: np.ndarray of shape (n_samples, n_classes)
 		"""
-		prog = Progbar(target=1 + int(len(input_batches) / self.config.batch_size))
+		prog = Progbar(target=1 + int(len(input_batches)))
 		total_dev_loss = 0
 		for i, input_batch in enumerate(input_batches):
 			feed = self.create_feed_dict(inputs_batch=input_batch, stacked_labels_batch=labels_batches[i], mask_batch=mask_batches[i]) #problem: labels has shape: [batch_size x max_sentence_length], should be opposite
@@ -287,7 +296,7 @@ class RNN(object):
 		train_input_batches, train_truth_batches, train_mask_batches = train_data
 		dev_input_batches, dev_truth_batches, dev_mask_batches = dev_data
 
-		prog = Progbar(target=1 + int(len(train_input_batches) / self.config.batch_size))
+		prog = Progbar(target=1 + int(len(train_input_batches)))
 
 		for i, input_batch in enumerate(train_input_batches):
 			loss = self.train_on_batch(sess, input_batch, train_truth_batches[i], train_mask_batches[i])
@@ -416,7 +425,7 @@ def tokenize_data(path, max_sentence_len, do_mask):
 	for line in f.readlines():
 		sentence = [int(x) for x in line.split()]
 		if len(sentence) > max_sentence_len:
-			continue
+			sentence = sentence[:max_sentence_len]
 		sequence_length.append(len(sentence))
 		if do_mask:
 			mask = [True] * len(sentence)
@@ -424,7 +433,7 @@ def tokenize_data(path, max_sentence_len, do_mask):
 			masks.append(mask)
 		sentence.extend([PAD_ID] * (max_sentence_len - len(sentence)))
 		tokenized_data.append(sentence)
-	print("Tokenized " + path)
+	print("Tokenized " + path + " with %d sentences" % len(tokenized_data))
 	return tokenized_data, masks, sequence_length
 
 def do_train(args):
