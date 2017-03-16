@@ -1,0 +1,9 @@
+2017-03-16 02:33:02,438:INFO: Building model...
+2017-03-16 02:33:29,143:INFO: took 26.70 seconds
+2017-03-16 02:33:37,304:INFO: number of training input batches, as indicated by fit: 5
+2017-03-16 02:33:37,305:INFO: Epoch 1 out of 10
+2017-03-16 02:33:37,305:INFO: number of train input batches: 5
+2017-03-16 02:33:40,722:INFO: Evaluating on development data:
+2017-03-16 02:33:41,193:INFO: Storing predictions in results/20170316_023302/preds
+2017-03-16 02:35:26,144:INFO: Epoch #1 dev loss: 7
+2017-03-16 02:35:26,144:INFO: New lowest loss! Saving model in results/20170316_023302/model.weights

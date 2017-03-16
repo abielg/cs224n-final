@@ -1,0 +1,80 @@
+article (input): the ruling democratic progressive party ( dpp ) concluded its annual national congress sunday , with a declaration that pledges 
+prediction: high high first first first first first first funds funds funds funds funds funds funds funds funds funds funds funds 
+title (truth): dpp congress ends with vow to build normal country <unk> taiwan <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): hsieh wen-ting , a head prosecutor with the supreme prosecutors office , will serve as new secretary-general of the judicial 
+prediction: capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization capitalization 
+title (truth): judicial yuan to get new secretary-general <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): ruling democratic progressive party ( dpp ) presidential candidate frank hsieh faces tough challenges in consolidating party ranks following the 
+prediction: foreign foreign foreign funds funds funds funds funds funds funds funds funds funds u.s. u.s. u.s. u.s. u.s. u.s. u.s. 
+title (truth): dpp presidential candidate faces tough challenges <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): the exchange <unk> for major foreign currencies quoted in new taiwan dollars by chang hwa commercial bank on monday <pad> 
+prediction: index wednesday taiex taiex taiex taiex taiex taiex taiex taiex taiex taiex taiex yuan agreement agreement agreement agreement agreement agreement 
+title (truth): today in history <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): minister of foreign affairs james huang proposed his `` # # st century global village diplomatic policy '' at the 
+prediction: funds funds said nt nt nt nt nt nt nt nt nt nt nt nt nt nt nt nt nt 
+title (truth): mofa chief unveils # # st century global village diplomatic policy <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): the fair trade commission under the executive yuan will launch an investigation into possible <unk> by several instant noodle makers 
+prediction: monday monday monday monday monday monday monday monday thursday thursday thursday thursday thursday thursday thursday thursday thursday thursday thursday thursday 
+title (truth): taiwan headline news <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): the inauguration of the high speed railway has greatly affected domestic air carriers , with the number of passengers on 
+prediction: changing down down down were were were were were were were were were were were were were were were were 
+title (truth): passenger volume on domestic flights down # # # # % for <unk> period <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): researchers at academia sinica have completed the development of a new `` sugar chip '' that is able to diagnose 
+prediction: market market market but economic economic economic economic economic economic economic economic funds funds funds kuomintang kuomintang kuomintang kuomintang kuomintang 
+title (truth): sugar chip for cancer detection developed <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): a free flu vaccination program kicked off monday , providing flu shots free of charge for groups of people considered 
+prediction: progressive progressive progressive progressive progressive progressive progressive progressive progressive plan plan plan plan plan plan plan plan plan plan plan 
+title (truth): free flu vaccination program kicks off <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): the international cooperation and development fund ( icdf ) under the ministry of foreign affairs ( mofa ) will cooperate 
+prediction: thursday thursday thursday progressive premier premier premier premier premier premier premier premier premier premier premier premier premier premier premier premier 
+title (truth): taiwan to offer loans to <unk> expats to buy homes in ecuador <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): share prices on the taiwan stock exchange rose slightly monday , with the weighted index , the market 's key 
+prediction: foreign free free free free free free free free free free free free free free free free free free free 
+title (truth): taiwan share prices close slightly higher <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): prices on taipei 's stock futures market were mostly higher monday as the taiwan stock exchange ( taiex ) capitalization 
+prediction: main main main main main main main main main for for for for for for for for for for for 
+title (truth): international headline news <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): the u.s. dollar lost ground against the new taiwan dollar on the taipei foreign exchange monday , falling nt $ 
+prediction: free free free free free free free free free free free free free free free free free free free free 
+title (truth): international headline news <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): education minister tu cheng-sheng said monday that taiwan 's national name is the republic of china but claimed that the 
+prediction: mac at at at at at plan plan plan plan plan plan plan plan plan plan plan plan plan plan 
+title (truth): international headline news <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): national security bureau ( nsb ) director shi hwei-yow said monday that the bureau will take action against anyone attempting 
+prediction: water water water high high high high high high high kmt kmt kmt kmt kmt kmt kmt kmt kmt kmt 
+title (truth): nsb to take action against national day disturbances <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): the national palace museum will hold a three-day sale from oct. # to offer its publications , a wide range 
+prediction: investigation investigation investigation foreign foreign foreign foreign foreign foreign foreign foreign foreign foreign foreign foreign foreign foreign foreign foreign foreign 
+title (truth): national palace museum 's annual sale to open oct. # <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): `` <unk> rain , `` an original opera created by the taiwan-born u.s.-based composer chen <unk> , will make its 
+prediction: district district international international international international state state state state state state state state state state state state state state 
+title (truth): original opera to make debut in november <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): national security bureau director shi hwei-yow said monday that his bureau will heed the personal security of candidates in the 
+prediction: taiex monday monday monday monday monday monday monday kmt kmt kmt kmt kmt kmt kmt kmt kmt kmt kmt kmt 
+title (truth): nsb to heed legislative candidates safety <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): the institute for information industry ( iii ) will hold open bidding on patent sales and license agreements on # 
+prediction: <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> <sos> 
+title (truth): institute for information industry to hold open patent bidding <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 
+article (input): a direct china links promise made by main opposition kuomintang ( kmt ) presidential candidate ma ying-jeou has discarded taiwan 
+prediction: wednesday police police police moved moved moved moved moved high high high high high high high high high high high 
+title (truth): kmt candidate 's link promise upsets taiwan 's dignity : official <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad> 
+ 

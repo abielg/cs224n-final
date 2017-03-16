@@ -1,0 +1,19 @@
+2017-03-16 02:45:32,632:INFO: Building model...
+2017-03-16 02:46:02,479:INFO: took 29.85 seconds
+2017-03-16 02:46:10,758:INFO: number of training input batches, as indicated by fit: 5
+2017-03-16 02:46:10,760:INFO: Epoch 1 out of 3
+2017-03-16 02:46:10,760:INFO: number of train input batches: 5
+2017-03-16 02:46:14,532:INFO: Evaluating on development data:
+2017-03-16 02:46:14,897:INFO: Epoch #1 dev loss: 7
+2017-03-16 02:46:14,898:INFO: New lowest loss! Saving model in results/20170316_024532/model.weights
+2017-03-16 02:46:33,249:INFO: Epoch 2 out of 3
+2017-03-16 02:46:33,275:INFO: number of train input batches: 5
+2017-03-16 02:46:36,262:INFO: Evaluating on development data:
+2017-03-16 02:46:36,534:INFO: Storing predictions in results/20170316_024532/preds
+2017-03-16 02:48:24,439:INFO: Epoch #2 dev loss: 7
+2017-03-16 02:48:24,603:INFO: New lowest loss! Saving model in results/20170316_024532/model.weights
+2017-03-16 02:48:42,658:INFO: Epoch 3 out of 3
+2017-03-16 02:48:42,658:INFO: number of train input batches: 5
+2017-03-16 02:48:45,636:INFO: Evaluating on development data:
+2017-03-16 02:48:45,895:INFO: Epoch #3 dev loss: 7
+2017-03-16 02:48:45,896:INFO: New lowest loss! Saving model in results/20170316_024532/model.weights

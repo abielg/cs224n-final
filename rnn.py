@@ -38,7 +38,7 @@ class Config(object):
 	encoder_hidden_size = 200
 	decoder_hidden_size = encoder_hidden_size * 2
 	batch_size = 20 # batch size was previously 2048
-	n_epochs = 10
+	n_epochs = 3
 	lr = 0.001
 	max_sentence_len = 20
 	vocab_size = 2500
@@ -62,7 +62,7 @@ class Config(object):
 
 class RNN(object):
 	def __init__(self, config):
-		self.save_predictions = True
+		self.save_predictions = False
 		self.config = config
 		loaded = np.load('data/summarization/glove.trimmed.50.npz'.format(self.config.embed_size))
 		self.embedding_matrix = loaded['glove']
@@ -210,11 +210,11 @@ class RNN(object):
 			preds, loss = sess.run([self.test_pred, self.test_loss], feed)
 
 		if (self.save_predictions == True):
-			self.save_outputs(sess, preds, inputs_batch, labels_batch)
+			self.save_outputs(sess, preds, inputs_batch, labels_batch, num_preds=200)
 
 		return loss
 
-	def save_outputs(self, sess, preds, inputs, titles): # shape of each input: [batch_size x max_sentence_length]
+	def save_outputs(self, sess, preds, inputs, titles, num_preds=-1): # shape of each input: [batch_size x max_sentence_length]
 		preds = tf.stack(preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
 		preds = tf.argmax(preds, axis=2) # new shape: [batch_size, max_sentence_length]
 
@@ -228,9 +228,9 @@ class RNN(object):
 		titles_list = tf.unstack(titles, num=self.config.batch_size)
 		preds_list =tf.unstack(preds, num=self.config.batch_size)
 
-		with gfile.GFile(self.config.preds_output, mode="wb") as output_file:
+		with gfile.GFile(self.config.preds_output, mode="w") as output_file:
 			logger.info("Storing predictions in " + self.config.preds_output)
-			for i, _input in enumerate(inputs_list):
+			for i, _input in enumerate(inputs_list[:num_preds]):
 				
 				_input = _input.eval(session=sess)
 				title = titles_list[i].eval(session=sess)
@@ -336,8 +336,8 @@ class RNN(object):
 		for epoch in range(self.config.n_epochs):
 			if epoch == self.config.n_epochs - 2:
 				self.save_predictions = True
-			#else:
-				#self.save_predictions = False
+			else:
+				self.save_predictions = False
 
 			logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
 			dev_loss = self.run_epoch(sess, (train_input_batches, train_truth_batches, train_mask_batches), \
@@ -397,12 +397,6 @@ def get_reg_minibatches(tokenized_data, batch_size):
 		batches.append( tokenized_data[prev_val:step] )
 		prev_val = step
 	return batches
-
-def test_stacked_minibatches():
-	data = [[1,2,3,4], [1,2,3,4], [1,2,3,4]]
-	result = get_minibatches(data, 2)
-	assert result == [[[1,1],[2,2],[3,3],[4,4]],[[1],[2],[3],[4]]]
-	print("minibatches function is correct")
 
 #Returns a list of sentences, which in turn are lists of integers that represent words
 def tokenize_data(path, max_sentence_len, do_mask):
