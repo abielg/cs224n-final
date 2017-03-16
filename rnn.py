@@ -195,7 +195,7 @@ class RNN(object):
 		_, loss = sess.run([self.train_op, self.train_loss], feed_dict=feed)
 		return loss
 
-	def save_outputs(self, preds): # shape of each input: [batch_size x max_sentence_length]
+	def save_outputs(self, sess, preds): # shape of each input: [batch_size x max_sentence_length]
 		preds = tf.stack(preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
 		preds = tf.argmax(preds, axis=2) # new shape: [batch_size, max_sentence_length]
 
@@ -213,28 +213,27 @@ class RNN(object):
 			logger.info("Storing predictions in " + self.config.preds_output)
 			for i, _input in enumerate(inputs_list):
 				
-				with sess.as_default():
-					_input = _input.eval()
-					title = titles_list[i].eval()
-					pred = preds_list[i].eval()
+				_input = _input.eval(session=sess)
+				title = titles_list[i].eval(session=sess)
+				pred = preds_list[i].eval(session=sess)
 
-					output_file.write("article (input): ")
-					for index in tf.unstack(_input): # input is a numpy array. iterate through it somehow
-						w = self.config.vocabulary[index]
-						output_file.write(w + " ")
-					output_file.write("\n")
+				output_file.write("article (input): ")
+				for index in tf.unstack(_input): # input is a numpy array. iterate through it somehow
+					w = self.config.vocabulary[index]
+					output_file.write(w + " ")
+				output_file.write("\n")
 
-					output_file.write("prediction: ")
-					for index in tf.unstack(pred):
-						w = self.config.vocabulary[index]
-						output_file.write(w + " ")
-					output_file.write("\n")
+				output_file.write("prediction: ")
+				for index in tf.unstack(pred):
+					w = self.config.vocabulary[index]
+					output_file.write(w + " ")
+				output_file.write("\n")
 
-					output_file.write("title (truth): ")
-					for index in tf.unstack(title):
-						w = self.config.vocabulary[index]
-						output_file.write(w + " ")
-					output_file.write("\n \n")
+				output_file.write("title (truth): ")
+				for index in tf.unstack(title):
+					w = self.config.vocabulary[index]
+					output_file.write(w + " ")
+				output_file.write("\n \n")
 
 	def predict_on_batch(self, sess, inputs_batch, labels_batch, mask_batch, using_dev=True):
 		feed = self.create_feed_dict(inputs_batch=inputs_batch, \
@@ -250,7 +249,7 @@ class RNN(object):
 			preds, loss = sess.run([self.test_pred, self.test_loss], feed)
 
 		if (self.save_predictions == True):
-			self.save_outputs(preds)
+			self.save_outputs(sess, preds)
 
 		return loss
 
