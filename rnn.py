@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 import os
 import time
-from util import Progbar
+from util import Progbar, minibatches
 import argparse
 from tensorflow.python.platform import gfile
 
@@ -47,6 +47,7 @@ class Config(object):
 		self.model_output = self.output_path + "model.weights"
 		self.log_output = self.output_path + "log"
 		self.vocabulary = self.init_vocab()
+		self.preds_output = self.output_path + "preds"
 
 	def init_vocab(self):
 		vocab_path = 'data/summarization/vocab.dat'
@@ -192,7 +193,7 @@ class RNN(object):
 		return preds, W, b
 
 	# Handles a single batch, returns the outputs
-	def add_pred_single_batch_test(self, W, b):
+	def add_pred_single_batch_test(self, W, b, keep_outputs=False):
 		with tf.variable_scope(tf.get_variable_scope(), reuse=True):
 			x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
 			x = tf.unstack(x, axis=0) # converts x into a list of tensors (list has max_sentence_len elems, each a tensor of shape [batch_size])
@@ -207,10 +208,48 @@ class RNN(object):
 				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
 				output_projection=output_proj_vars, \
 				feed_previous=True, dtype=tf.float32)
-		return preds
+
+			projected_preds = [tf.matmul(pred, W) + b for pred in preds] # list, max_sentence_length long, of tensors: [batch_size x vocab_size]
+			projected_preds = tf.stack(projected_preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
+
+			if keep_outputs:
+
+				inputs = tf.transpose(x)
+				titles = tf.transpose(self.stacked_labels_placeholder)
+				projected_preds = tf.argmax(projected_preds, axis=2)
+				save_outputs(inputs, titles, projected_preds)
+
+		return projected_preds
 
 	# assumes we already have padding implemented.
 
+	def save_outputs(inputs, titles, preds): # shape of each input: [batch_size x max_sentence_length]
+		inputs_list = tf.unstack(inputs) # batch_size elems, each a tensor: [max_sentence_len]
+		titles_list = tf.unstack(titles)
+		preds_list =tf.unstack(preds)
+
+		with gfile.GFile(self.config.preds_output, mode="wb") as output_file:
+			for i, _input in enumerate(inputs_list):
+				title = titles_list[i]
+				pred = preds_list[i]
+
+				output_file.write("article (input): ")
+				for index in tf.unstack(_input):
+					w = self.config.vocabulary[index]
+					output_file.write(w + " ")
+				output_file.write("\n")
+
+				output_file.write("prediction: ")
+				for index in tf.unstack(pred):
+					w = self.config.vocabulary[index]
+					output_file.write(w + " ")
+				output_file.write("\n")
+
+				output_file.write("title (truth): ")
+				for index in tf.unstack(title):
+					w = self.config.vocabulary[index]
+					output_file.write(w + " ")
+				output_file.write("\n \n")
 
 	def add_loss_op(self, preds, W, b, print_pred=False): # W and b refer to the weights and biases of the output projection matrix
 
@@ -222,9 +261,6 @@ class RNN(object):
 
 		"""
 		#labels = # need to fill this in with rank 2 tensor with words as ID numbers. can save in config
-
-		projected_preds = [tf.matmul(pred, W) + b for pred in preds] # list, max_sentence_length long, of tensors: [batch_size x vocab_size]
-		projected_preds = tf.stack(projected_preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
 
 		unstacked_labels = tf.transpose(self.stacked_labels_placeholder) # shape: [batch_size x max_sentence_len]
 
@@ -271,7 +307,7 @@ class RNN(object):
 		Returns:
 			predictions: np.ndarray of shape (n_samples, n_classes)
 		"""
-		prog = Progbar(target=1 + int(len(input_batches) / self.config.batch_size))
+		prog = Progbar(target=1 + len(input_batches))
 		total_dev_loss = 0
 		for i, input_batch in enumerate(input_batches):
 			feed = self.create_feed_dict(inputs_batch=input_batch, stacked_labels_batch=labels_batches[i], mask_batch=mask_batches[i]) #problem: labels has shape: [batch_size x max_sentence_length], should be opposite
@@ -284,8 +320,8 @@ class RNN(object):
 	def run_epoch(self, sess,  train_data, dev_data):
 		train_input_batches, train_truth_batches, train_mask_batches = train_data
 		dev_input_batches, dev_truth_batches, dev_mask_batches = dev_data
-
-		prog = Progbar(target=1 + int(len(train_input_batches) / self.config.batch_size))
+		logger.info("number of train input batches: %d", int(len(train_input_batches)))
+		prog = Progbar(target=1 + len(train_input_batches))
 
 		for i, input_batch in enumerate(train_input_batches):
 			loss = self.train_on_batch(sess, input_batch, train_truth_batches[i], train_mask_batches[i])
@@ -334,6 +370,8 @@ class RNN(object):
 		train_input_batches = get_stacked_minibatches(train_input, self.config.batch_size)
 		train_truth_batches = get_stacked_minibatches(train_truth, self.config.batch_size)
 		train_mask_batches = get_reg_minibatches(train_truth_mask, self.config.batch_size)
+
+		logger.info("number of training input batches, as indicated by fit: %d", len(train_input_batches))
 
 		dev_input_batches = get_stacked_minibatches(dev_input, self.config.batch_size)
 		dev_truth_batches = get_stacked_minibatches(dev_truth, self.config.batch_size)
