@@ -22,6 +22,8 @@ logger = logging.getLogger("final_project")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
+model_path = ""
+
 class Config(object):
 	"""Holds model hyperparams and data information.
 
@@ -34,14 +36,14 @@ class Config(object):
 	n_features = 36
 	n_classes = 3
 	dropout = 0.5
-	embed_size = 50
+	embed_size = 200
 	encoder_hidden_size = 200
 	decoder_hidden_size = encoder_hidden_size * 2
-	batch_size = 20 # batch size was previously 2048
-	n_epochs = 3
+	batch_size = 50 # batch size was previously 2048
+	n_epochs = 10
 	lr = 0.001
 	max_sentence_len = 20
-	vocab_size = 2500
+	vocab_size = 10000
 
 	def __init__(self):
 		self.output_path = "results/{:%Y%m%d_%H%M%S}/".format(datetime.now())
@@ -210,7 +212,7 @@ class RNN(object):
 			preds, loss = sess.run([self.test_pred, self.test_loss], feed)
 
 		if (self.save_predictions == True):
-			self.save_outputs(sess, preds, inputs_batch, labels_batch, num_preds=200)
+			self.save_outputs(sess, preds, inputs_batch, labels_batch, num_preds=1)
 
 		return loss
 
@@ -475,6 +477,7 @@ def do_test(args):
 
 		with tf.Session() as session:
 			session.run(init)
+			print("Applying saved params: " + args.saved_params)
 			saver.restore(session, args.saved_params) # restores and initiales old saved params. make sure this works
 			# TODO: create way of inputting model_output params that we want to evaluate on
 
@@ -491,7 +494,8 @@ if __name__ == '__main__':
 	command_parser.set_defaults(func=do_train)
 
 	command_parser = subparsers.add_parser('test', help='')
-	command_parser.add_argument('-p', '--saved-params', type=argparse.FileType('r'), help="Saved params to use when testing")
+	parser.add_argument("--saved_params")
+	#command_parser.add_argument('-p', '--saved-params', type=argparse.FileType('r'), help="Saved params to use when testing")
 	command_parser.set_defaults(func=do_test)
 
 	ARGS = parser.parse_args()
@@ -500,6 +504,7 @@ if __name__ == '__main__':
 		sys.exit(1)
 	else:
 		ARGS.func(ARGS)
+		model_path = ARGS.saved_params
 
 		
 '''

@@ -148,6 +148,7 @@ if __name__ == '__main__':
 
     train_path = pjoin(args.source_dir, "train")
     valid_path = pjoin(args.source_dir, "val")
+    test_path = pjoin(args.source_dir, "test")
 
     create_vocabulary(vocab_path,
                       [pjoin(args.source_dir, "train.title"),
@@ -178,3 +179,9 @@ if __name__ == '__main__':
     y_ids_path = valid_path + ".ids.title"
     data_to_token_ids(valid_path + ".article", x_dis_path, vocab_path, args.vocab_size)
     data_to_token_ids(valid_path + ".title", y_ids_path, vocab_path, args.vocab_size)
+    '''
+    x_dis_path = test_path + ".ids.article"
+    y_ids_path = test_path + ".ids.title"
+    data_to_token_ids(test_path + ".article", x_dis_path, vocab_path, args.vocab_size)
+    data_to_token_ids(test_path + ".title", y_ids_path, vocab_path, args.vocab_size)
+    '''
