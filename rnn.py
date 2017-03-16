@@ -7,6 +7,7 @@ from datetime import datetime
 import os
 import time
 from util import Progbar
+import argparse
 
 from tensorflow.contrib import rnn
 
@@ -44,6 +45,16 @@ class Config(object):
 		os.makedirs(self.output_path)
 		self.model_output = self.output_path + "model.weights"
 		self.log_output = self.output_path + "log"
+		self.vocabulary = init_vocab()
+
+	def init_vocab(self):
+		vocab_path = 'data/summarization/vocab.dat'
+		if gfile.Exists(vocab_path):
+			vocab = []
+			with gfile.GFile(vocab_path, mode="r") as f:
+				vocab.extend(f.readlines())
+			vocab = [line.strip('\n') for line in vocab]
+			return vocab
 
 class RNN(object):
 	def __init__(self, config):
@@ -200,7 +211,7 @@ class RNN(object):
 	# assumes we already have padding implemented.
 
 
-	def add_loss_op(self, preds, W, b): # W and b refer to the weights and biases of the output projection matrix
+	def add_loss_op(self, preds, W, b, print_pred=False): # W and b refer to the weights and biases of the output projection matrix
 
 		"""
 		W: [encoder_hidden_size x vocab_size]
@@ -288,7 +299,7 @@ class RNN(object):
 
 
 	# function called when working with test set. outputs loss on test set, along with the model's predictions
-	def preds_and_loss(self, sess, saver) # not sure which of these params we actually need
+	def preds_and_loss(self, sess, saver): # not sure which of these params we actually need
 		# TODO: make sure what we're working with is actually 'test.ids.article'
 		test_input, _, test_input_len = tokenize_data('val.ids.article', self.config.max_sentence_len, False)
 		test_truth, test_truth_mask, test_truth_len = tokenize_data('val.ids.title', self.config.max_sentence_len, True)
@@ -302,7 +313,7 @@ class RNN(object):
 		prog = Progbar(target=1 + int(len(test_input_batches) / self.config.batch_size))
 
 		total_test_loss = 0
-		for i, input_batch in enumerate(test_input_batches)
+		for i, input_batch in enumerate(test_input_batches):
 			loss = self.predict_on_batch(sess, input_batch, test_truth_batches[i], test_mask_batches[i])
 			total_test_loss += loss
 			prog.update(i + 1, [("test loss on batch", loss)])
@@ -481,10 +492,10 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Trains and tests an attentive model for abstractive summarization')
 	subparsers = parser.add_subparsers()
 
-    command_parser = subparsers.add_parser('train', help='')
-    command_parser.set_defaults(func=do_train)
+	command_parser = subparsers.add_parser('train', help='')
+	command_parser.set_defaults(func=do_train)
 
-    command_parser = subparsers.add_parser('test', help='')
-    command_parser.set_defaults(func=do_test)
+	command_parser = subparsers.add_parser('test', help='')
+	command_parser.set_defaults(func=do_test)
 
 
