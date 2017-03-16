@@ -228,7 +228,7 @@ class RNN(object):
 		titles_list = tf.unstack(titles, num=self.config.batch_size)
 		preds_list =tf.unstack(preds, num=self.config.batch_size)
 
-		with gfile.GFile(self.config.preds_output, mode="wb") as output_file:
+		with gfile.GFile(self.config.preds_output, mode="w") as output_file:
 			logger.info("Storing predictions in " + self.config.preds_output)
 			for i, _input in enumerate(inputs_list):
 				
