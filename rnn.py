@@ -7,6 +7,7 @@ from datetime import datetime
 import os
 import time
 from util import Progbar
+import argparse
 
 from tensorflow.contrib import rnn
 
@@ -448,7 +449,7 @@ def do_train():
 		#			print_sentence(f, sentence, labels, predictions)
 
 # using previously trained parameters, calculates loss and generates labels for unseen data
-def do_test():
+def do_test(args):
 
 	# allows filehandler to write to the file specified by log_output
 	config = Config()
@@ -469,7 +470,7 @@ def do_test():
 
 		with tf.Session() as session:
 			session.run(init)
-			saver.restore(session, rnn.config.model_output) # restores and initiales old saved params
+			saver.restore(session, args.saved_params) # restores and initiales old saved params. make sure this works
 			# TODO: create way of inputting model_output params that we want to evaluate on
 
 			# TODO: need method of taking in input_data
@@ -485,6 +486,13 @@ if __name__ == '__main__':
     command_parser.set_defaults(func=do_train)
 
     command_parser = subparsers.add_parser('test', help='')
+    command_parser.add_argument('-p', '--saved-params', type=argparse.FileType('r'), help="Saved params to use when testing")
     command_parser.set_defaults(func=do_test)
 
+    ARGS = parser.parse_args()
+    if ARGS.func is None:
+        parser.print_help()
+        sys.exit(1)
+    else:
+        ARGS.func(ARGS)
 
