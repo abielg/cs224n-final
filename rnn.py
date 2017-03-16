@@ -8,6 +8,7 @@ import os
 import time
 from util import Progbar
 import argparse
+from tensorflow.python.platform import gfile
 
 from tensorflow.contrib import rnn
 from tensorflow.python.platform import gfile
@@ -190,7 +191,7 @@ class RNN(object):
 				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
 				output_projection=output_proj_vars, feed_previous=False, dtype=tf.float32)
 
-		return preds #, W, b # not sure we really need to return these
+		return preds, W, b
 
 	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_test(self, W, b):
@@ -426,7 +427,7 @@ def tokenize_data(path, max_sentence_len, do_mask):
 	print("Tokenized " + path)
 	return tokenized_data, masks, sequence_length
 
-def do_train():
+def do_train(args):
 
 	# allows filehandler to write to the file specified by log_output
 	config = Config()
