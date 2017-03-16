@@ -218,38 +218,6 @@ class RNN(object):
 		return preds
 	# assumes we already have padding implemented.
 
-	def save_outputs(self, inputs, titles, preds): # shape of each input: [batch_size x max_sentence_length]
-		inputs_list = tf.unstack(inputs, num=self.config.batch_size) # batch_size elems, each a tensor: [max_sentence_len]
-		titles_list = tf.unstack(titles, num=self.config.batch_size)
-		preds_list =tf.unstack(preds, num=self.config.batch_size)
-
-		with gfile.GFile(self.config.preds_output, mode="wb") as output_file:
-			logger.info("Storing predictions in " + self.config.preds_output)
-			for i, _input in enumerate(inputs_list):
-				
-				with sess.as_default():
-					_input = _input.eval()
-					title = titles_list[i].eval()
-					pred = preds_list[i].eval()
-
-					output_file.write("article (input): ")
-					for index in tf.unstack(_input): # input is a numpy array. iterate through it somehow
-						w = self.config.vocabulary[index]
-						output_file.write(w + " ")
-					output_file.write("\n")
-
-					output_file.write("prediction: ")
-					for index in tf.unstack(pred):
-						w = self.config.vocabulary[index]
-						output_file.write(w + " ")
-					output_file.write("\n")
-
-					output_file.write("title (truth): ")
-					for index in tf.unstack(title):
-						w = self.config.vocabulary[index]
-						output_file.write(w + " ")
-					output_file.write("\n \n")
-
 	def add_loss_op(self, preds, W, b, print_pred=False): # W and b refer to the weights and biases of the output projection matrix
 
 		"""
@@ -290,41 +258,76 @@ class RNN(object):
 		_, loss = sess.run([self.train_op, self.train_loss], feed_dict=feed)
 		return loss
 
-	def predict_on_batch(self, sess, inputs_batch, labels_batch, mask_batch):
+	def save_outputs(self, preds): # shape of each input: [batch_size x max_sentence_length]
+		
+		preds = tf.stack(preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
+		preds = tf.argmax(projected_preds, axis=2) # new shape: [batch_size, max_sentence_length]
+
+		inputs = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+		inputs = tf.unstack(inputs, axis=0)
+		inputs = tf.transpose(x)
+		titles = tf.transpose(self.stacked_labels_placeholder)
+
+		inputs_list = tf.unstack(inputs, num=self.config.batch_size) # batch_size elems, each a tensor: [max_sentence_len]
+		titles_list = tf.unstack(titles, num=self.config.batch_size)
+		preds_list =tf.unstack(preds, num=self.config.batch_size)
+
+		with gfile.GFile(self.config.preds_output, mode="wb") as output_file:
+			logger.info("Storing predictions in " + self.config.preds_output)
+			for i, _input in enumerate(inputs_list):
+				
+				with sess.as_default():
+					_input = _input.eval()
+					title = titles_list[i].eval()
+					pred = preds_list[i].eval()
+
+					output_file.write("article (input): ")
+					for index in tf.unstack(_input): # input is a numpy array. iterate through it somehow
+						w = self.config.vocabulary[index]
+						output_file.write(w + " ")
+					output_file.write("\n")
+
+					output_file.write("prediction: ")
+					for index in tf.unstack(pred):
+						w = self.config.vocabulary[index]
+						output_file.write(w + " ")
+					output_file.write("\n")
+
+					output_file.write("title (truth): ")
+					for index in tf.unstack(title):
+						w = self.config.vocabulary[index]
+						output_file.write(w + " ")
+					output_file.write("\n \n")
+
+	def predict_on_batch(self, sess, inputs_batch, labels_batch, mask_batch, using_dev=True):
 		feed = self.create_feed_dict(inputs_batch=inputs_batch, \
 			stacked_labels_batch=labels_batch, \
 			mask_batch=mask_batch)
-		preds, loss = sess.run([self.test_pred, self.test_loss]) # need to format/save predictions
 
+		preds, loss = None # make sure this is legit
+		if (using_dev):
+			preds, loss = sess.run([self.dev_pred, self.dev_loss])
+		else:
+			preds, loss = sess.run([self.test_pred, self.test_loss])
 
-		if self.save_predictions == True:
-			x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
-			x = tf.unstack(x, axis=0)
-			inputs = tf.transpose(x)
-			titles = tf.transpose(self.stacked_labels_placeholder)
-			projected_preds = tf.argmax(projected_preds, axis=2)
-			self.save_outputs(inputs, titles, projected_preds)
+		if (self.save_predictions == True):
+			self.save_outputs(inputs, titles, preds)
 
-		######### output out preds here? ######
 		return loss
 
 	# dev_loss is likely to be much higher than train_loss, since we're feeding in prev outputs (instead of ground truth)
 	# into the decoder
 	def compute_dev_loss(self, sess, input_batches, labels_batches, mask_batches):
-		"""Compute dev loss for a single batch
-
-		Args:
-			sess: tf.Session()
-			input_batch: np.ndarray of shape (n_samples, n_features)
-		Returns:
-			predictions: np.ndarray of shape (n_samples, n_classes)
-		"""
 
 		prog = Progbar(target=1 + len(input_batches))
 		total_dev_loss = 0
 		for i, input_batch in enumerate(input_batches):
-			feed = self.create_feed_dict(inputs_batch=input_batch, stacked_labels_batch=labels_batches[i], mask_batch=mask_batches[i]) #problem: labels has shape: [batch_size x max_sentence_length], should be opposite
-			dev_loss = sess.run(self.dev_loss, feed_dict=feed)
+
+		#	feed = self.create_feed_dict(inputs_batch=input_batch, stacked_labels_batch=labels_batches[i], mask_batch=mask_batches[i]) #problem: labels has shape: [batch_size x max_sentence_length], should be opposite
+		#	dev_loss = sess.run(self.dev_loss, feed_dict=feed)
+			predict_on_batch(self, sess, inputs_batch=input_batch, labels_batch=labels_batches[i], \
+				mask_batch=mask_batches[i], using_dev=True)
+
 			total_dev_loss += dev_loss
 			prog.update(i + 1, [("dev loss", dev_loss)])
 		return total_dev_loss
@@ -366,7 +369,7 @@ class RNN(object):
 
 		total_test_loss = 0
 		for i, input_batch in enumerate(test_input_batches):
-			loss = self.predict_on_batch(sess, input_batch, test_truth_batches[i], test_mask_batches[i])
+			loss = self.predict_on_batch(sess, input_batch, test_truth_batches[i], test_mask_batches[i], using_dev=False)
 			total_test_loss += loss
 			prog.update(i + 1, [("test loss on batch", loss)])
 
