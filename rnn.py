@@ -256,6 +256,7 @@ class RNN(object):
 			stacked_labels_batch=labels_batch, \
 			mask_batch=mask_batch)
 		preds, loss = sess.run([self.test_pred, self.test_loss]) # need to format/save predictions
+		######### output out preds here? ######
 		return loss
 
 	# dev_loss is likely to be much higher than train_loss, since we're feeding in prev outputs (instead of ground truth)
