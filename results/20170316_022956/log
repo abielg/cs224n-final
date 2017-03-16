@@ -1,0 +1,7 @@
+2017-03-16 02:29:56,242:INFO: Building model...
+2017-03-16 02:30:21,050:INFO: took 24.81 seconds
+2017-03-16 02:30:28,792:INFO: number of training input batches, as indicated by fit: 5
+2017-03-16 02:30:28,793:INFO: Epoch 1 out of 10
+2017-03-16 02:30:28,793:INFO: number of train input batches: 5
+2017-03-16 02:30:32,100:INFO: Evaluating on development data:
+2017-03-16 02:30:32,558:INFO: Storing predictions in results/20170316_022956/preds
