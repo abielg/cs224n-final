@@ -62,11 +62,14 @@ class Config(object):
 
 class RNN(object):
 	def __init__(self, config):
+		self.save_predictions = True
 		self.config = config
 		loaded = np.load('data/summarization/glove.trimmed.50.npz'.format(self.config.embed_size))
 		self.embedding_matrix = loaded['glove']
 		self.build()
-		self.save_predictions = False
+
+	def __nonzero__(self):
+		return self.save_predictions != 0
 
 	def add_placeholders(self):
 		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, None]))
@@ -212,19 +215,10 @@ class RNN(object):
 				output_projection=output_proj_vars, \
 				feed_previous=True, dtype=tf.float32)
 
-			projected_preds = [tf.matmul(pred, W) + b for pred in preds] # list, max_sentence_length long, of tensors: [batch_size x vocab_size]
-			projected_preds = tf.stack(projected_preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
-
-			if self.save_predictions:
-				inputs = tf.transpose(x)
-				titles = tf.transpose(self.stacked_labels_placeholder)
-				projected_preds = tf.argmax(projected_preds, axis=2)
-				save_outputs(inputs, titles, projected_preds)
-
-		return projected_preds
+		return preds
 	# assumes we already have padding implemented.
 
-	def save_outputs(inputs, titles, preds): # shape of each input: [batch_size x max_sentence_length]
+	def save_outputs(self, inputs, titles, preds): # shape of each input: [batch_size x max_sentence_length]
 		inputs_list = tf.unstack(inputs) # batch_size elems, each a tensor: [max_sentence_len]
 		titles_list = tf.unstack(titles)
 		preds_list =tf.unstack(preds)
@@ -263,6 +257,17 @@ class RNN(object):
 
 		"""
 		#labels = # need to fill this in with rank 2 tensor with words as ID numbers. can save in config
+		x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+		x = tf.unstack(x, axis=0)
+
+		projected_preds = [tf.matmul(pred, W) + b for pred in preds] # list, max_sentence_length long, of tensors: [batch_size x vocab_size]
+		projected_preds = tf.stack(projected_preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
+
+		if self.save_predictions == True:
+			inputs = tf.transpose(x)
+			titles = tf.transpose(self.stacked_labels_placeholder)
+			projected_preds = tf.argmax(projected_preds, axis=2)
+			self.save_outputs(inputs, titles, projected_preds)
 
 		unstacked_labels = tf.transpose(self.stacked_labels_placeholder) # shape: [batch_size x max_sentence_len]
 
