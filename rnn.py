@@ -36,14 +36,14 @@ class Config(object):
 	n_features = 36
 	n_classes = 3
 	dropout = 0.5
-	embed_size = 100
+	embed_size = 200
 	encoder_hidden_size = 200
 	decoder_hidden_size = encoder_hidden_size * 2
 	batch_size = 50 # batch size was previously 2048
 	n_epochs = 10
 	lr = 0.001
 	max_sentence_len = 20
-	vocab_size = 2500
+	vocab_size = 10000
 
 	def __init__(self):
 		self.output_path = "results/{:%Y%m%d_%H%M%S}/".format(datetime.now())
@@ -212,7 +212,7 @@ class RNN(object):
 			preds, loss = sess.run([self.test_pred, self.test_loss], feed)
 
 		if (self.save_predictions == True):
-			self.save_outputs(sess, preds, inputs_batch, labels_batch, num_preds=5)
+			self.save_outputs(sess, preds, inputs_batch, labels_batch, num_preds=1)
 
 		return loss
 
