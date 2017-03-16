@@ -220,32 +220,35 @@ class RNN(object):
 
 	def save_outputs(self, inputs, titles, preds): # shape of each input: [batch_size x max_sentence_length]
 		inputs_list = tf.unstack(inputs, num=self.config.batch_size) # batch_size elems, each a tensor: [max_sentence_len]
-		titles_list = tf.unstack(titles)
-		preds_list =tf.unstack(preds)
+		titles_list = tf.unstack(titles, num=self.config.batch_size)
+		preds_list =tf.unstack(preds, num=self.config.batch_size)
 
 		with gfile.GFile(self.config.preds_output, mode="wb") as output_file:
 			logger.info("Storing predictions in " + self.config.preds_output)
 			for i, _input in enumerate(inputs_list):
-				title = titles_list[i]
-				pred = preds_list[i]
+				
+				with sess.as_default():
+					_input = _input.eval()
+					title = titles_list[i].eval()
+					pred = preds_list[i].eval()
 
-				output_file.write("article (input): ")
-				for index in tf.unstack(_input):
-					w = self.config.vocabulary[index]
-					output_file.write(w + " ")
-				output_file.write("\n")
+					output_file.write("article (input): ")
+					for index in tf.unstack(_input): # input is a numpy array. iterate through it somehow
+						w = self.config.vocabulary[index]
+						output_file.write(w + " ")
+					output_file.write("\n")
 
-				output_file.write("prediction: ")
-				for index in tf.unstack(pred):
-					w = self.config.vocabulary[index]
-					output_file.write(w + " ")
-				output_file.write("\n")
+					output_file.write("prediction: ")
+					for index in tf.unstack(pred):
+						w = self.config.vocabulary[index]
+						output_file.write(w + " ")
+					output_file.write("\n")
 
-				output_file.write("title (truth): ")
-				for index in tf.unstack(title):
-					w = self.config.vocabulary[index]
-					output_file.write(w + " ")
-				output_file.write("\n \n")
+					output_file.write("title (truth): ")
+					for index in tf.unstack(title):
+						w = self.config.vocabulary[index]
+						output_file.write(w + " ")
+					output_file.write("\n \n")
 
 	def add_loss_op(self, preds, W, b, print_pred=False): # W and b refer to the weights and biases of the output projection matrix
 
@@ -257,17 +260,9 @@ class RNN(object):
 
 		"""
 		#labels = # need to fill this in with rank 2 tensor with words as ID numbers. can save in config
-		x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
-		x = tf.unstack(x, axis=0)
 
 		projected_preds = [tf.matmul(pred, W) + b for pred in preds] # list, max_sentence_length long, of tensors: [batch_size x vocab_size]
 		projected_preds = tf.stack(projected_preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
-
-		if self.save_predictions == True:
-			inputs = tf.transpose(x)
-			titles = tf.transpose(self.stacked_labels_placeholder)
-			projected_preds = tf.argmax(projected_preds, axis=2)
-			self.save_outputs(inputs, titles, projected_preds)
 
 		unstacked_labels = tf.transpose(self.stacked_labels_placeholder) # shape: [batch_size x max_sentence_len]
 
@@ -300,6 +295,16 @@ class RNN(object):
 			stacked_labels_batch=labels_batch, \
 			mask_batch=mask_batch)
 		preds, loss = sess.run([self.test_pred, self.test_loss]) # need to format/save predictions
+
+
+		if self.save_predictions == True:
+			x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
+			x = tf.unstack(x, axis=0)
+			inputs = tf.transpose(x)
+			titles = tf.transpose(self.stacked_labels_placeholder)
+			projected_preds = tf.argmax(projected_preds, axis=2)
+			self.save_outputs(inputs, titles, projected_preds)
+
 		######### output out preds here? ######
 		return loss
 
@@ -387,7 +392,7 @@ class RNN(object):
 		dev_mask_batches = get_reg_minibatches(dev_truth_mask, self.config.batch_size)
 
 		for epoch in range(self.config.n_epochs):
-			if epoch == self.config.n_epochs - 1:
+			if epoch == self.config.n_epochs - 2:
 				self.save_predictions = True
 			else:
 				self.save_predictions = False
