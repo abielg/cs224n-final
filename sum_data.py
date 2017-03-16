@@ -37,6 +37,7 @@ def setup_args():
     parser.add_argument("--glove_dir", default=glove_dir)
     parser.add_argument("--vocab_dir", default=vocab_dir)
     parser.add_argument("--glove_dim", default=50, type=int) #check this default value
+    parser.add_argument("--vocab_size", default=10000, type=int)
     return parser.parse_args()
 
 def basic_tokenizer(sentence):
@@ -46,14 +47,14 @@ def basic_tokenizer(sentence):
     return [w for w in words if w]
 
 # assigns a unique integer to each element of the vocab (these tuples are stored in vocab)
-def initialize_vocabulary(vocabulary_path): 
+def initialize_vocabulary(vocabulary_path, vocab_size): 
     # map vocab to word embeddings
     if gfile.Exists(vocabulary_path):
         rev_vocab = []
         with gfile.GFile(vocabulary_path, mode="r") as f:
             rev_vocab.extend(f.readlines())
         rev_vocab = [line.strip('\n') for line in rev_vocab]
-        vocab = dict([(x, y) for (y, x) in enumerate(rev_vocab)])
+        vocab = dict([(x, y) for (y, x) in enumerate(rev_vocab[:vocab_size])])
         return vocab, rev_vocab
     else:
         raise ValueError("Vocabulary file %s not found.", vocabulary_path)
@@ -126,11 +127,11 @@ def sentence_to_token_ids(sentence, vocabulary, tokenizer=None):
         words = basic_tokenizer(sentence)
     return [vocabulary.get(w, UNK_ID) for w in words]
 
-def data_to_token_ids(data_path, target_path, vocabulary_path,
+def data_to_token_ids(data_path, target_path, vocabulary_path, vocab_size,
                       tokenizer=None):
     if not gfile.Exists(target_path):
         print("Tokenizing data in %s" % data_path)
-        vocab, _ = initialize_vocabulary(vocabulary_path)
+        vocab, _ = initialize_vocabulary(vocabulary_path, vocab_size)
         with gfile.GFile(data_path, mode="rb") as data_file:
             with gfile.GFile(target_path, mode="w") as tokens_file:
                 counter = 0
@@ -153,7 +154,9 @@ if __name__ == '__main__':
                        pjoin(args.source_dir, "train.article"),
                        pjoin(args.source_dir, "val.title"),
                        pjoin(args.source_dir, "val.article")])
-    vocab, rev_vocab = initialize_vocabulary(pjoin(args.vocab_dir, "vocab.dat"))
+
+    print("NOTE: Vocab size is set to %d" % args.vocab_size)
+    vocab, rev_vocab = initialize_vocabulary(pjoin(args.vocab_dir, "vocab.dat"), args.vocab_size)
 
     # ======== Trim Distributed Word Representation =======
     # If you use other word representations, you should change the code below
@@ -168,10 +171,10 @@ if __name__ == '__main__':
 
     x_train_dis_path = train_path + ".ids.article"
     y_train_ids_path = train_path + ".ids.title"
-    data_to_token_ids(train_path + ".article", x_train_dis_path, vocab_path)
-    data_to_token_ids(train_path + ".title", y_train_ids_path, vocab_path)
+    data_to_token_ids(train_path + ".article", x_train_dis_path, vocab_path, args.vocab_size)
+    data_to_token_ids(train_path + ".title", y_train_ids_path, vocab_path, args.vocab_size)
 
     x_dis_path = valid_path + ".ids.article"
     y_ids_path = valid_path + ".ids.title"
-    data_to_token_ids(valid_path + ".article", x_dis_path, vocab_path)
-    data_to_token_ids(valid_path + ".title", y_ids_path, vocab_path)
+    data_to_token_ids(valid_path + ".article", x_dis_path, vocab_path, args.vocab_size)
+    data_to_token_ids(valid_path + ".title", y_ids_path, vocab_path, args.vocab_size)

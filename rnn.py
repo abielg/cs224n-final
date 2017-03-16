@@ -33,7 +33,7 @@ class Config(object):
 	embed_size = 50
 	encoder_hidden_size = 200
 	decoder_hidden_size = encoder_hidden_size * 2
-	batch_size = 3 # batch size was previously 2048
+	batch_size = 50 # batch size was previously 2048
 	n_epochs = 10
 	lr = 0.001
 	max_sentence_len = 20
@@ -53,9 +53,9 @@ class RNN(object):
 		self.build()
 
 	def add_placeholders(self):
-		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]))
-		self.stacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, self.config.batch_size]))
-		self.mask_placeholder = tf.placeholder(tf.bool, shape=([self.config.batch_size, self.config.max_sentence_len])) # batch_sz x max_sentence_length
+		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, None]))
+		self.stacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, None]))
+		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len])) # batch_sz x max_sentence_length
 
 	def create_feed_dict(self, inputs_batch, unstacked_labels_batch=None, stacked_labels_batch=None, mask_batch=None):
 		feed_dict = {
