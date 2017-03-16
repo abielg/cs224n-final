@@ -219,7 +219,7 @@ class RNN(object):
 	# assumes we already have padding implemented.
 
 	def save_outputs(self, inputs, titles, preds): # shape of each input: [batch_size x max_sentence_length]
-		inputs_list = tf.unstack(inputs) # batch_size elems, each a tensor: [max_sentence_len]
+		inputs_list = tf.unstack(inputs, num=self.config.batch_size) # batch_size elems, each a tensor: [max_sentence_len]
 		titles_list = tf.unstack(titles)
 		preds_list =tf.unstack(preds)
 
