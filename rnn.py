@@ -37,7 +37,7 @@ class Config(object):
 	n_epochs = 10
 	lr = 0.001
 	max_sentence_len = 20
-	vocab_size = 1000
+	vocab_size = 2500
 
 	def __init__(self):
 		self.output_path = "results/{:%Y%m%d_%H%M%S}/".format(datetime.now())
@@ -177,7 +177,7 @@ class RNN(object):
 				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
 				output_projection=output_proj_vars, feed_previous=False, dtype=tf.float32)
 
-		return preds, W, b
+		return preds #, W, b # not sure we really need to return these
 
 	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_test(self, W, b):
@@ -236,10 +236,16 @@ class RNN(object):
 	def train_on_batch(self, sess, inputs_batch, labels_batch, mask_batch):
 		feed = self.create_feed_dict(inputs_batch=inputs_batch, \
 			stacked_labels_batch=labels_batch, \
-			mask_batch=mask_batch) # bug: mask_batch passed in has shape [max_sentence_length(20) x batch_size(3)], when it should be the opposite
+			mask_batch=mask_batch)
 		_, loss = sess.run([self.train_op, self.train_loss], feed_dict=feed)
 		return loss
 
+	def predict_on_batch(self, sess, inputs_batch, labels_batch, mask_batch):
+		feed = self.create_feed_dict(inputs_batch=inputs_batch, \
+			stacked_labels_batch=labels_batch, \
+			mask_batch=mask_batch)
+		preds, loss = sess.run([self.test_pred, self.test_loss]) # need to format/save predictions
+		return loss
 
 	# dev_loss is likely to be much higher than train_loss, since we're feeding in prev outputs (instead of ground truth)
 	# into the decoder
@@ -268,7 +274,6 @@ class RNN(object):
 
 		prog = Progbar(target=1 + int(len(train_input_batches) / self.config.batch_size))
 
-
 		for i, input_batch in enumerate(train_input_batches):
 			loss = self.train_on_batch(sess, input_batch, train_truth_batches[i], train_mask_batches[i])
 			prog.update(i + 1, [("train loss", loss)])
@@ -276,10 +281,33 @@ class RNN(object):
 		#	if self.report: self.report.log_train_loss(loss)
 		#print("")
 
-		logger.info("Evaluating on development data")
+		logger.info("Evaluating on development data:")
 		dev_loss = self.compute_dev_loss(sess, dev_input_batches, dev_truth_batches, dev_mask_batches) # print loss on dev set
 
 		return dev_loss # TODO: to check where the return value is used
+
+
+	# function called when working with test set. outputs loss on test set, along with the model's predictions
+	def preds_and_loss(self, sess, saver) # not sure which of these params we actually need
+		# TODO: make sure what we're working with is actually 'test.ids.article'
+		test_input, _, test_input_len = tokenize_data('val.ids.article', self.config.max_sentence_len, False)
+		test_truth, test_truth_mask, test_truth_len = tokenize_data('val.ids.title', self.config.max_sentence_len, True)
+
+		test_input_batches = get_stacked_minibatches(test_input, self.config.batch_size)
+		test_truth_batches = get_stacked_minibatches(test_truth, self.config.batch_size)
+		test_mask_batches = get_reg_minibatches(test_truth_mask, self.config.batch_size)
+
+		# run through once (don't need multiple epochs)
+
+		prog = Progbar(target=1 + int(len(test_input_batches) / self.config.batch_size))
+
+		total_test_loss = 0
+		for i, input_batch in enumerate(test_input_batches)
+			loss = self.predict_on_batch(sess, input_batch, test_truth_batches[i], test_mask_batches[i])
+			total_test_loss += loss
+			prog.update(i + 1, [("test loss on batch", loss)])
+
+		return total_test_loss
 
 	def fit(self, sess, saver):
 		lowest_dev_loss = float("inf")
@@ -292,8 +320,7 @@ class RNN(object):
 
 		train_input_batches = get_stacked_minibatches(train_input, self.config.batch_size)
 		train_truth_batches = get_stacked_minibatches(train_truth, self.config.batch_size)
-		train_mask_batches = get_reg_minibatches(train_truth_mask, self.config.batch_size) # shape: [max_sentence_length x batch_size], but it should be the opposite
-
+		train_mask_batches = get_reg_minibatches(train_truth_mask, self.config.batch_size)
 
 		dev_input_batches = get_stacked_minibatches(dev_input, self.config.batch_size)
 		dev_truth_batches = get_stacked_minibatches(dev_truth, self.config.batch_size)
@@ -309,6 +336,7 @@ class RNN(object):
 				if saver:
 					logger.info("New lowest loss! Saving model in %s", self.config.model_output)
 					saver.save(sess, self.config.model_output) # saves parameters for best-performing model (lowest total dev loss)
+			
 			print("")
 			
 	#		if self.report:
@@ -316,6 +344,7 @@ class RNN(object):
 	#			self.report.save()
 			
 		return lowest_dev_loss
+
 
 	def output_predictions(self, preds):
 		output_file = open('dev_predictions', 'w')
@@ -333,6 +362,8 @@ class RNN(object):
 	#	output_predictions(self.dev_pred)
 		self.dev_loss = self.add_loss_op(self.dev_pred, W, b)
 
+		self.test_pred = self.add_pred_single_batch_test(W, b)
+		self.test_loss = self.add_loss_op(self.test_pred, W, b)
 
 '''
 returns a list with lists containing the first words of all sentences, then the second words, then
@@ -416,6 +447,7 @@ def do_train():
 		#		for sentence, labels, predictions in output:
 		#			print_sentence(f, sentence, labels, predictions)
 
+# using previously trained parameters, calculates loss and generates labels for unseen data
 def do_test():
 
 	# allows filehandler to write to the file specified by log_output
@@ -437,13 +469,22 @@ def do_test():
 
 		with tf.Session() as session:
 			session.run(init)
-			saver.restore(session, rnn.config.model_output) # TODO: read up on this. should restore old params
-			# get saved parameters
+			saver.restore(session, rnn.config.model_output) # restores and initiales old saved params
+			# TODO: create way of inputting model_output params that we want to evaluate on
 
+			# TODO: need method of taking in input_data
+			total_loss = rnn.preds_and_loss(session, saver)
+			logger.info("Total loss on test set: %d", total_loss)
 			# get outputs on data
 
 if __name__ == '__main__':
-	do_train()
+	parser = argparse.ArgumentParser(description='Trains and tests an attentive model for abstractive summarization')
+	subparsers = parser.add_subparsers()
 
+    command_parser = subparsers.add_parser('train', help='')
+    command_parser.set_defaults(func=do_train)
+
+    command_parser = subparsers.add_parser('test', help='')
+    command_parser.set_defaults(func=do_test)
 
 
