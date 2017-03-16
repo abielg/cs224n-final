@@ -195,45 +195,6 @@ class RNN(object):
 		_, loss = sess.run([self.train_op, self.train_loss], feed_dict=feed)
 		return loss
 
-	def save_outputs(self, sess, preds): # shape of each input: [batch_size x max_sentence_length]
-		preds = tf.stack(preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
-		preds = tf.argmax(preds, axis=2) # new shape: [batch_size, max_sentence_length]
-
-		inputs = self.encoder_inputs_placeholder # shape: [max_sentence_len, batch_size]
-	#	inputs = tf.unstack(inputs, axis=0) 
-		inputs = tf.transpose(inputs) # new shape: [batch_size, max_sentence_len]
-
-		titles = tf.transpose(self.stacked_labels_placeholder)
-
-		inputs_list = tf.unstack(inputs, num=self.config.batch_size) # batch_size elems, each a tensor: [max_sentence_len]
-		titles_list = tf.unstack(titles, num=self.config.batch_size)
-		preds_list =tf.unstack(preds, num=self.config.batch_size)
-
-		with gfile.GFile(self.config.preds_output, mode="wb") as output_file:
-			logger.info("Storing predictions in " + self.config.preds_output)
-			for i, _input in enumerate(inputs_list):
-				
-				_input = _input.eval(session=sess)
-				title = titles_list[i].eval(session=sess)
-				pred = preds_list[i].eval(session=sess)
-
-				output_file.write("article (input): ")
-				for index in tf.unstack(_input): # input is a numpy array. iterate through it somehow
-					w = self.config.vocabulary[index]
-					output_file.write(w + " ")
-				output_file.write("\n")
-
-				output_file.write("prediction: ")
-				for index in tf.unstack(pred):
-					w = self.config.vocabulary[index]
-					output_file.write(w + " ")
-				output_file.write("\n")
-
-				output_file.write("title (truth): ")
-				for index in tf.unstack(title):
-					w = self.config.vocabulary[index]
-					output_file.write(w + " ")
-				output_file.write("\n \n")
 
 	def predict_on_batch(self, sess, inputs_batch, labels_batch, mask_batch, using_dev=True):
 		feed = self.create_feed_dict(inputs_batch=inputs_batch, \
@@ -249,9 +210,49 @@ class RNN(object):
 			preds, loss = sess.run([self.test_pred, self.test_loss], feed)
 
 		if (self.save_predictions == True):
-			self.save_outputs(sess, preds)
+			self.save_outputs(sess, preds, inputs_batch, labels_batch)
 
 		return loss
+
+	def save_outputs(self, sess, preds, inputs, titles): # shape of each input: [batch_size x max_sentence_length]
+		preds = tf.stack(preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
+		preds = tf.argmax(preds, axis=2) # new shape: [batch_size, max_sentence_length]
+
+	#	inputs = self.encoder_inputs_placeholder # shape: [max_sentence_len, batch_size]
+	#	inputs = tf.unstack(inputs, axis=0) 
+		inputs = tf.transpose(inputs) # new shape: [batch_size, max_sentence_len]
+
+		titles = tf.transpose(titles)
+
+		inputs_list = tf.unstack(inputs, num=self.config.batch_size) # batch_size elems, each a tensor: [max_sentence_len]
+		titles_list = tf.unstack(titles, num=self.config.batch_size)
+		preds_list =tf.unstack(preds, num=self.config.batch_size)
+
+		with gfile.GFile(self.config.preds_output, mode="wb") as output_file:
+			logger.info("Storing predictions in " + self.config.preds_output)
+			for i, _input in enumerate(inputs_list):
+				
+				_input = _input.eval(session=sess)
+				title = titles_list[i].eval(session=sess)
+				pred = preds_list[i].eval(session=sess)
+
+				output_file.write("article (input): ")
+				for index in tf.unstack(_input): # input is a numpy array. iterate through it somehow
+					w = self.config.vocabulary[index.eval(session=sess)]
+					output_file.write(w + " ")
+				output_file.write("\n")
+
+				output_file.write("prediction: ")
+				for index in tf.unstack(pred):
+					w = self.config.vocabulary[index.eval(session=sess)]
+					output_file.write(w + " ")
+				output_file.write("\n")
+
+				output_file.write("title (truth): ")
+				for index in tf.unstack(title):
+					w = self.config.vocabulary[index.eval(session=sess)]
+					output_file.write(w + " ")
+				output_file.write("\n \n")
 
 	# dev_loss is likely to be much higher than train_loss, since we're feeding in prev outputs (instead of ground truth)
 	# into the decoder
