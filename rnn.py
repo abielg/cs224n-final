@@ -132,7 +132,7 @@ class RNN(object):
 				initializer=tf.contrib.layers.xavier_initializer())
 			preds, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(encoder_inputs=x, \
 				decoder_inputs=y, cell=lstm_cell, num_encoder_symbols=self.config.vocab_size, \
-				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
+				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=10, \
 				output_projection=output_proj_vars, feed_previous=False, dtype=tf.float32)
 
 		return preds, W, b
@@ -150,7 +150,7 @@ class RNN(object):
 				initializer=tf.contrib.layers.xavier_initializer())
 			preds, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(encoder_inputs=x, \
 				decoder_inputs=x, cell=lstm_cell, num_encoder_symbols=self.config.vocab_size, \
-				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
+				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=10, \
 				output_projection=output_proj_vars, \
 				feed_previous=True, dtype=tf.float32)
 
@@ -198,7 +198,7 @@ class RNN(object):
 		return loss
 
 
-	def predict_on_batch(self, sess, inputs_batch, labels_batch, mask_batch, using_dev=True):
+	def predict_on_batch(self, sess, inputs_batch, labels_batch, mask_batch, num_of_batch=2, using_dev=True):
 		feed = self.create_feed_dict(inputs_batch=inputs_batch, \
 			stacked_labels_batch=labels_batch, \
 			mask_batch=mask_batch)
@@ -212,7 +212,8 @@ class RNN(object):
 			preds, loss = sess.run([self.test_pred, self.test_loss], feed)
 
 		if (self.save_predictions == True):
-			self.save_outputs(sess, preds, inputs_batch, labels_batch, num_preds=1)
+			if num_of_batch % 2 == 0:
+				self.save_outputs(sess, preds, inputs_batch, labels_batch, num_preds=1)
 
 		return loss
 
@@ -230,7 +231,7 @@ class RNN(object):
 		titles_list = tf.unstack(titles, num=self.config.batch_size)
 		preds_list =tf.unstack(preds, num=self.config.batch_size)
 
-		with gfile.GFile(self.config.preds_output, mode="w") as output_file:
+		with gfile.GFile(self.config.preds_output, mode="a") as output_file:
 			logger.info("Storing predictions in " + self.config.preds_output)
 			for i, _input in enumerate(inputs_list[:num_preds]):
 				
@@ -267,10 +268,12 @@ class RNN(object):
 		#	feed = self.create_feed_dict(inputs_batch=input_batch, stacked_labels_batch=labels_batches[i], mask_batch=mask_batches[i]) #problem: labels has shape: [batch_size x max_sentence_length], should be opposite
 		#	dev_loss = sess.run(self.dev_loss, feed_dict=feed)
 			dev_loss = self.predict_on_batch(sess, inputs_batch=input_batch, labels_batch=labels_batches[i], \
-				mask_batch=mask_batches[i], using_dev=True)
+				mask_batch=mask_batches[i], num_of_batch=i, using_dev=True)
 
 			total_dev_loss += dev_loss
 			prog.update(i + 1, [("dev loss", dev_loss)])
+			if i == len(input_batches) - 1:
+				logger.info("Last batch dev loss: " + str(dev_loss))
 		return total_dev_loss
 
 
@@ -281,14 +284,15 @@ class RNN(object):
 		logger.info("number of train input batches: %d", int(len(train_input_batches)))
 		prog = Progbar(target=1 + len(train_input_batches))
 
+		loss = 0
 		for i, input_batch in enumerate(train_input_batches):
 			loss = self.train_on_batch(sess, input_batch, train_truth_batches[i], train_mask_batches[i])
 			prog.update(i + 1, [("train loss", loss)])
+		logger.info("\nTrain loss: " + str(loss))
 
 		#	if self.report: self.report.log_train_loss(loss)
 		#print("")
 
-		logger.info("Evaluating on development data:")
 		dev_loss = self.compute_dev_loss(sess, dev_input_batches, dev_truth_batches, dev_mask_batches) # print loss on dev set
 
 		return dev_loss # TODO: to check where the return value is used
@@ -297,8 +301,8 @@ class RNN(object):
 	# function called when working with test set. outputs loss on test set, along with the model's predictions
 	def preds_and_loss(self, sess, saver): # not sure which of these params we actually need
 		# TODO: make sure what we're working with is actually 'test.ids.article'
-		test_input, _, test_input_len = tokenize_data('val.ids.article', self.config.max_sentence_len, False)
-		test_truth, test_truth_mask, test_truth_len = tokenize_data('val.ids.title', self.config.max_sentence_len, True)
+		test_input, _, test_input_len = tokenize_data('test.ids.article', self.config.max_sentence_len, False)
+		test_truth, test_truth_mask, test_truth_len = tokenize_data('test.ids.title', self.config.max_sentence_len, True)
 
 		test_input_batches = get_stacked_minibatches(test_input, self.config.batch_size)
 		test_truth_batches = get_stacked_minibatches(test_truth, self.config.batch_size)
@@ -309,8 +313,9 @@ class RNN(object):
 		prog = Progbar(target=1 + int(len(test_input_batches) / self.config.batch_size))
 
 		total_test_loss = 0
+		self.save_predictions = True
 		for i, input_batch in enumerate(test_input_batches):
-			loss = self.predict_on_batch(sess, input_batch, test_truth_batches[i], test_mask_batches[i], using_dev=False)
+			loss = self.predict_on_batch(sess, input_batch, test_truth_batches[i], test_mask_batches[i], num_of_batch=i, using_dev=False)
 			total_test_loss += loss
 			prog.update(i + 1, [("test loss on batch", loss)])
 
