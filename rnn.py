@@ -8,6 +8,7 @@ import os
 import time
 from util import Progbar
 import argparse
+from tensorflow.python.platform import gfile
 
 from tensorflow.contrib import rnn
 
@@ -45,7 +46,7 @@ class Config(object):
 		os.makedirs(self.output_path)
 		self.model_output = self.output_path + "model.weights"
 		self.log_output = self.output_path + "log"
-		self.vocabulary = init_vocab()
+		self.vocabulary = self.init_vocab()
 
 	def init_vocab(self):
 		vocab_path = 'data/summarization/vocab.dat'
@@ -188,7 +189,7 @@ class RNN(object):
 				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=1, \
 				output_projection=output_proj_vars, feed_previous=False, dtype=tf.float32)
 
-		return preds #, W, b # not sure we really need to return these
+		return preds, W, b
 
 	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_test(self, W, b):
@@ -424,7 +425,7 @@ def tokenize_data(path, max_sentence_len, do_mask):
 	print("Tokenized " + path)
 	return tokenized_data, masks, sequence_length
 
-def do_train():
+def do_train(args):
 
 	# allows filehandler to write to the file specified by log_output
 	config = Config()
@@ -496,14 +497,14 @@ if __name__ == '__main__':
 	command_parser = subparsers.add_parser('train', help='')
 	command_parser.set_defaults(func=do_train)
 
-    command_parser = subparsers.add_parser('test', help='')
-    command_parser.add_argument('-p', '--saved-params', type=argparse.FileType('r'), help="Saved params to use when testing")
-    command_parser.set_defaults(func=do_test)
+	command_parser = subparsers.add_parser('test', help='')
+	command_parser.add_argument('-p', '--saved-params', type=argparse.FileType('r'), help="Saved params to use when testing")
+	command_parser.set_defaults(func=do_test)
 
-    ARGS = parser.parse_args()
-    if ARGS.func is None:
-        parser.print_help()
-        sys.exit(1)
-    else:
-        ARGS.func(ARGS)
+	ARGS = parser.parse_args()
+	if ARGS.func is None:
+		parser.print_help()
+		sys.exit(1)
+	else:
+		ARGS.func(ARGS)
 
