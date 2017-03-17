@@ -36,7 +36,7 @@ def setup_args():
     parser.add_argument("--source_dir", default=source_dir)
     parser.add_argument("--glove_dir", default=glove_dir)
     parser.add_argument("--vocab_dir", default=vocab_dir)
-    parser.add_argument("--glove_dim", default=50, type=int) #check this default value
+    parser.add_argument("--glove_dim", default=200, type=int) #check this default value
     parser.add_argument("--vocab_size", default=10000, type=int)
     return parser.parse_args()
 
