@@ -114,10 +114,10 @@ class RNN(object):
 
 	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_train(self):
-
-		input_sequence_lengths = self.sequence_placeholder
-		encoder_outputs, final_enc_state = self.encode() # TODO: gather sequence lengths
-		preds = self.decode_train(encoder_outputs, final_enc_state)
+		with tf.variable_scope(tf.get_variable_scope()):
+			input_sequence_lengths = self.sequence_placeholder
+			encoder_outputs, final_enc_state = self.encode() # TODO: gather sequence lengths
+			preds = self.decode_train(encoder_outputs, final_enc_state)
 
 		return preds # [batch_size, max_sentence_len, vocab_size]
 
@@ -147,7 +147,7 @@ class RNN(object):
 
 		final_state_fw, final_state_bw = final_state
 
-	#	final_state = tf.concat([final_state_fw[1], final_state_bw[1]], 1)
+		final_state = tf.concat([final_state_fw[1], final_state_bw[1]], 1)
 
 		return concat_outputs, final_state # concat_outputs -> attention_values, sequence_length -> attention_values_length
 		# concat_outputs: [batch_size, max_sentence_len, output_size (encoder_hidden_size)]
@@ -173,9 +173,9 @@ class RNN(object):
 
 			intermediate_hidden_state = None
 			if (i==0): # state_is_tuple is true for first cell bc end of encoder function outputs final state in weird ass format
-
+				print(cur_hidden_state)
 				lstmCell = tf.contrib.rnn.LSTMCell(num_units=self.config.decoder_hidden_size, \
-					initializer=tf.contrib.layers.xavier_initializer(), state_is_tuple=True)
+					initializer=tf.contrib.layers.xavier_initializer(), state_is_tuple=False)
 				intermediate_hidden_state, _ = lstmCell(cur_inputs, cur_hidden_state) # LSTM output has shape: [batch_size, decoder_hidden_size]
 
 			else:
