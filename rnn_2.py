@@ -39,7 +39,7 @@ class Config(object):
 	embed_size = 200
 	encoder_hidden_size = 200
 	decoder_hidden_size = encoder_hidden_size * 2
-	batch_size = 50 # batch size was previously 2048
+	batch_size = 10 # batch size was previously 2048
 	n_epochs = 10
 	lr = 0.001
 	max_sentence_len = 20
@@ -77,8 +77,9 @@ class RNN(object):
 		self.encoder_inputs_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, None]))
 		self.stacked_labels_placeholder = tf.placeholder(tf.int32, shape=([self.config.max_sentence_len, None]))
 		self.mask_placeholder = tf.placeholder(tf.bool, shape=([None, self.config.max_sentence_len])) # batch_sz x max_sentence_length
+		self.sequence_placeholder = tf.placeholder(tf.int32, shape=([None]))
 
-	def create_feed_dict(self, inputs_batch, unstacked_labels_batch=None, stacked_labels_batch=None, mask_batch=None):
+	def create_feed_dict(self, inputs_batch, unstacked_labels_batch=None, stacked_labels_batch=None, sequence_batch=None, mask_batch=None):
 		feed_dict = {
 			self.encoder_inputs_placeholder: inputs_batch,
 		}
@@ -88,10 +89,12 @@ class RNN(object):
 
 		if mask_batch is not None:
 			feed_dict[self.mask_placeholder] = mask_batch
+		if sequence_batch is not None:
+			feed_dict[self.sequence_batch] = sequence_batch
 		return feed_dict
 
 
-	def add_embedding(self):
+	def add_embedding(self, placeholder):
 		"""Adds an embedding layer that maps from input tokens (integers) to vectors and then
 		concatenates those vectors:
 
@@ -106,58 +109,99 @@ class RNN(object):
 		"""
 		### YOUR CODE HERE (~4-6 lines)
 		embedding_tensor = tf.Variable(self.embedding_matrix)
-		lookup_tensor = tf.nn.embedding_lookup(embedding_tensor, self.inputs_placeholder)
+		lookup_tensor = tf.nn.embedding_lookup(embedding_tensor, placeholder)
 		#embeddings = tf.reshape(lookup_tensor, [-1, self.config.max_sentence_len, self.config.embed_size])
 		print("Created embeddings tensor for the input")
 		### END YOUR CODE
-		return embeddings
+		return lookup_tensor
 
 	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_train(self):
 
 		with tf.variable_scope(tf.get_variable_scope()):
-			x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
-			y = self.stacked_labels_placeholder
+			#tensor of shape [max_sen_len, batch_size, embed_size]
+			x = self.add_embedding(self.encoder_inputs_placeholder)
+			
+			#Tensor of shape [max_sen_len, batch_size, embed_size]
+			y = self.add_embedding(self.stacked_labels_placeholder)
 
-			# used encoder hidden size for output projection since this model uses a unidirectional LSTM encoder
-			W = tf.get_variable("W", shape=[self.config.encoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
-			b = tf.get_variable("b", shape=[self.config.vocab_size], initializer=tf.constant_initializer(0.0))
-
-			output_proj_vars = (W, b)
-
-			x = tf.unstack(x, axis=0) # converts x into a list of tensors (list has max_sentence_len elems, each a tensor of shape [batch_size])
+			#list of size max_sen_len with tensors of shape [batch_size, embed_size]
 			y = tf.unstack(y, axis=0)
 
-			lstm_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, \
-				initializer=tf.contrib.layers.xavier_initializer())
-			preds, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(encoder_inputs=x, \
-				decoder_inputs=y, cell=lstm_cell, num_encoder_symbols=self.config.vocab_size, \
-				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=10, \
-				output_projection=output_proj_vars, feed_previous=False, dtype=tf.float32)
+			sequence_length = self.sequence_placeholder
 
-		return preds, W, b
+			fw_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+			bckwd_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+
+			encoder_outputs, encoder_final_states = tf.nn.bidirectional_dynamic_rnn(fw_cell, bckwd_cell, x, sequence_length=sequence_length, time_major=True, dtype=tf.float64)			
+
+			final_state_fw, final_state_bw = encoder_final_states
+
+			encoder_final_states = tf.concat([final_state_fw[1], final_state_bw[1]], 1)
+
+
+			encoder_outputs = (tf.transpose(encoder_outputs[0], (1,0,2)), tf.transpose(encoder_outputs[1], (1,0,2)))
+			attention_states = tf.concat(encoder_outputs, 2)
+
+			decoder_cell = tf.contrib.rnn.LSTMCell(self.config.decoder_hidden_size, \
+							initializer=tf.contrib.layers.xavier_initializer(), state_is_tuple=False)
+			
+			#SETTING NUM_HEADS TO 8
+			decoder_outputs, decoder_state = tf.contrib.legacy_seq2seq.attention_decoder(y, encoder_final_states, attention_states,\
+											 decoder_cell, output_size=self.config.vocab_size, num_heads=8, dtype=tf.float64)
+
+			#decoder_outputs, decoder_state = tf.contrib.legacy_seq2seq.rnn_decoder(y, encoder_final_states, decoder_cell)
+
+			# used encoder hidden size for output projection since this model uses a unidirectional LSTM encoder
+			#W = tf.get_variable("W", shape=[self.config.encoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
+			#b = tf.get_variable("b", shape=[self.config.vocab_size], initializer=tf.constant_initializer(0.0))
+
+			#decoder_ouputs is a list of max_sen_len elems with tensors of size (batch, vocab_size)
+
+		return decoder_outputs
 
 	# Handles a single batch, returns the outputs
-	def add_pred_single_batch_test(self, W, b):
+	def add_pred_single_batch_test(self):
 		with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-			x = self.encoder_inputs_placeholder # must be 1D list of int32 Tensors of shape [batch_size]
-			x = tf.unstack(x, axis=0) # converts x into a list of tensors (list has max_sentence_len elems, each a tensor of shape [batch_size])
+			#tensor of shape [max_sen_len, batch_size, embed_size]
+			x = self.add_embedding(self.encoder_inputs_placeholder)
 
-			# don't have premade decoder inputs. will feed previous decoder output into next decoder cell's input
-			output_proj_vars = (W, b)
+			sequence_length = self.sequence_placeholder
 
-			lstm_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, \
-				initializer=tf.contrib.layers.xavier_initializer())
-			preds, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(encoder_inputs=x, \
-				decoder_inputs=x, cell=lstm_cell, num_encoder_symbols=self.config.vocab_size, \
-				num_decoder_symbols=self.config.vocab_size, embedding_size=self.config.embed_size, num_heads=10, \
-				output_projection=output_proj_vars, \
-				feed_previous=True, dtype=tf.float32)
+			fw_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+			bckwd_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 
-		return preds
+			encoder_outputs, encoder_final_states = tf.nn.bidirectional_dynamic_rnn(fw_cell, bckwd_cell, x, sequence_length=sequence_length, time_major=True, dtype=tf.float64)			
+
+			final_state_fw, final_state_bw = encoder_final_states
+
+			encoder_final_states = tf.concat([final_state_fw[1], final_state_bw[1]], 1)
+
+			encoder_outputs = (tf.transpose(encoder_outputs[0], (1,0,2)), tf.transpose(encoder_outputs[1], (1,0,2)))
+
+			attention_states = tf.concat(encoder_outputs, 2)
+
+			decoder_cell = tf.contrib.rnn.LSTMCell(self.config.decoder_hidden_size, \
+							initializer=tf.contrib.layers.xavier_initializer(), state_is_tuple=False)
+
+
+			#loop function: receives an output of dim vocab_size, does arg_max, and gets that word's embedding
+			'''
+			def loop_function(prev, i):
+				preds = tf.argmax(prev, axis=1)
+				input = self.add_embedding(preds)
+				return input
+			'''
+			#SETTING NUM_HEADS TO 8
+			decoder_outputs, decoder_state = tf.contrib.legacy_seq2seq.attention_decoder(tf.unstack(x), encoder_final_states, attention_states,\
+											 decoder_cell, output_size=self.config.vocab_size, num_heads=8,\
+											 dtype=tf.float64)
+
+
+		return decoder_outputs
 	# assumes we already have padding implemented.
 
-	def add_loss_op(self, preds, W, b, print_pred=False): # W and b refer to the weights and biases of the output projection matrix
+	def add_loss_op(self, preds, print_pred=False): # W and b refer to the weights and biases of the output projection matrix
 
 		"""
 		W: [encoder_hidden_size x vocab_size]
@@ -168,12 +212,16 @@ class RNN(object):
 		"""
 		#labels = # need to fill this in with rank 2 tensor with words as ID numbers. can save in config
 
-		projected_preds = [tf.matmul(pred, W) + b for pred in preds] # list, max_sentence_length long, of tensors: [batch_size x vocab_size]
-		projected_preds = tf.stack(projected_preds, axis=1) # new shape: [batch_size, max_sentence_length, vocab_size]
+		#projected_preds = [tf.matmul(pred, W) + b for pred in preds] # list, max_sentence_length long, of tensors: [batch_size x vocab_size]
+		
+		#by stacking, preds will be a tensor of shape (max_sentence_len, batch_size, vocab_size)
+		preds = tf.stack(preds)
+
+		preds = tf.transpose(preds, (1,0,2)) # new shape: [batch_size, max_sentence_length, vocab_size]
 
 		unstacked_labels = tf.transpose(self.stacked_labels_placeholder) # shape: [batch_size x max_sentence_len]
 
-		ce = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=unstacked_labels, logits=projected_preds)
+		ce = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=unstacked_labels, logits=preds)
 		# shape of ce: same as labels, with same type as preds [batch_size x max_sentence_length]
 		ce = tf.boolean_mask(ce, self.mask_placeholder)
 		loss = tf.reduce_mean(ce)
@@ -190,10 +238,11 @@ class RNN(object):
 		return train_op
 
 	# 
-	def train_on_batch(self, sess, inputs_batch, labels_batch, mask_batch):
+	def train_on_batch(self, sess, inputs_batch, labels_batch, mask_batch, sequence_batch):
 		feed = self.create_feed_dict(inputs_batch=inputs_batch, \
 			stacked_labels_batch=labels_batch, \
-			mask_batch=mask_batch)
+			mask_batch=mask_batch, \
+			sequence_batch=sequence_batch)
 		_, loss = sess.run([self.train_op, self.train_loss], feed_dict=feed)
 		return loss
 
@@ -278,15 +327,15 @@ class RNN(object):
 
 
 	def run_epoch(self, sess,  train_data, dev_data):
-		train_input_batches, train_truth_batches, train_mask_batches = train_data
-		dev_input_batches, dev_truth_batches, dev_mask_batches = dev_data
+		train_input_batches, train_truth_batches, train_mask_batches, train_input_sequence = train_data
+		dev_input_batches, dev_truth_batches, dev_mask_batches, dev_input_sequence = dev_data
 
 		logger.info("number of train input batches: %d", int(len(train_input_batches)))
 		prog = Progbar(target=1 + len(train_input_batches))
 
 		loss = 0
 		for i, input_batch in enumerate(train_input_batches):
-			loss = self.train_on_batch(sess, input_batch, train_truth_batches[i], train_mask_batches[i])
+			loss = self.train_on_batch(sess, input_batch, train_truth_batches[i], train_mask_batches[i], train_input_sequence[i])
 			prog.update(i + 1, [("train loss", loss)])
 		logger.info("\nTrain loss: " + str(loss))
 
@@ -333,12 +382,14 @@ class RNN(object):
 		train_input_batches = get_stacked_minibatches(train_input, self.config.batch_size)
 		train_truth_batches = get_stacked_minibatches(train_truth, self.config.batch_size)
 		train_mask_batches = get_reg_minibatches(train_truth_mask, self.config.batch_size)
+		train_input_sequence = get_reg_minibatches(train_input_len, self.config.batch_size)
 
 		logger.info("number of training input batches, as indicated by fit: %d", len(train_input_batches))
 
 		dev_input_batches = get_stacked_minibatches(dev_input, self.config.batch_size)
 		dev_truth_batches = get_stacked_minibatches(dev_truth, self.config.batch_size)
 		dev_mask_batches = get_reg_minibatches(dev_truth_mask, self.config.batch_size)
+		dev_input_sequence = get_reg_minibatches(dev_input_len, self.config.batch_size)
 
 		for epoch in range(self.config.n_epochs):
 			if epoch == self.config.n_epochs - 2:
@@ -347,8 +398,8 @@ class RNN(object):
 				self.save_predictions = False
 
 			logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
-			dev_loss = self.run_epoch(sess, (train_input_batches, train_truth_batches, train_mask_batches), \
-										(dev_input_batches, dev_truth_batches, dev_mask_batches))
+			dev_loss = self.run_epoch(sess, (train_input_batches, train_truth_batches, train_mask_batches, train_input_sequence), \
+										(dev_input_batches, dev_truth_batches, dev_mask_batches, dev_input_sequence))
 			logger.info("Epoch #%d dev loss: %d", epoch + 1, dev_loss)
 			if dev_loss < lowest_dev_loss:
 				lowest_dev_loss = dev_loss
@@ -373,16 +424,15 @@ class RNN(object):
 
 	def build(self):
 		self.add_placeholders()
-		self.train_pred, W, b = self.add_pred_single_batch_train() # train_pred is stacked list (# elems = max_sent_length) of tensors: [batch_size x vocab_size]
-		self.train_loss = self.add_loss_op(self.train_pred, W, b) # W and b refer to the weights and biases of the output projection matrix
+		self.train_pred = self.add_pred_single_batch_train() # train_pred is stacked list (# elems = max_sent_length) of tensors: [batch_size x vocab_size]
+		self.train_loss = self.add_loss_op(self.train_pred) # W and b refer to the weights and biases of the output projection matrix
 		self.train_op = self.add_training_op(self.train_loss)
 
-		self.dev_pred = self.add_pred_single_batch_test(W, b)
-	#	output_predictions(self.dev_pred)
-		self.dev_loss = self.add_loss_op(self.dev_pred, W, b)
+		self.dev_pred = self.add_pred_single_batch_test()
+		self.dev_loss = self.add_loss_op(self.dev_pred)
 
-		self.test_pred = self.add_pred_single_batch_test(W, b)
-		self.test_loss = self.add_loss_op(self.test_pred, W, b)
+		self.test_pred = self.add_pred_single_batch_test()
+		self.test_loss = self.add_loss_op(self.test_pred)
 
 '''
 returns a list with lists containing the first words of all sentences, then the second words, then
@@ -510,68 +560,3 @@ if __name__ == '__main__':
 	else:
 		ARGS.func(ARGS)
 		model_path = ARGS.saved_params
-
-		
-'''
-	"""
-	We need two different functions for training and testing. At training time, the word vectors representing
-	the headline are passed in as inputs to the decoder. At test time, the previous decoder output is passed
-	into the next decoder cell's input. Function handles a single batch.
-	"""
-
-	def add_pred_single_batch_train2(self):
-		x = self.encoder_inputs_placeholder # float32 Tensor of shape [batch_size, max_sentence_length, embed_size]
-		y = self.stacked_labels_placeholder_list # int32 Tensor of shape [batch_size, max_sentence_length, embed_size]
-		#encoder_sequence_length = # TODO: fill this in
-
-		fw_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		bckwd_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-
-		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
-
-
-		outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fw_cell, bckwd_cell, x, sequence_length=encoder_sequence_length, dtype=tf.float32)
-		encoder_final_states = tf.concat(output_states, 2) # dimension: [batch_size x max_sentence_length x encoder_hidden_size * 2]
-
-		decoder_cell = tf.contrib.rnn.LSTMCell(self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-
-		#decoder_sequence_length = 
-		outputs, state = tf.nn.dynamic_rnn(decoder_cell, y, sequence_length=decoder_sequence_length, initial_state=encoder_final_states)
-
-		W = tf.Variable("W", shape=[None, self.config.decoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
-		b = tf.Variable("b", shape=[None, self.config.max_sentence_len, self.config.vocab_size], initializer=tf.constant_initializer(0.0))
-
-		preds = tf.matmul(outputs, W) + b
-
-		"""
-		outputs: A a tensor shaped [batch_size, max_sentence_len, decoder_hidden_size]
-		containing the generated outputs
-		"""
-		return preds # list (word by word) of 2D tensors: [batch_size, max_sentence_len, vocab_size]
-
-
-	def add_pred_single_batch_test2(self):
-		x = self.encoder_inputs_placeholder # float32 Tensor of shape [batch_size, max_sentence_length, embed_size]
-		y = self.stacked_labels_placeholder_list # int32 Tensor of shape [batch_size, max_sentence_length, embed_size]
-		#encoder_sequence_length = # TODO: fill this in
-
-		fw_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		bckwd_cell = tf.contrib.rnn.LSTMCell(self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-
-		#docs: https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq
-
-		outputs, output_states = tf.nn.bidirectional_dynamic_rnn(fw_cell, bckwd_cell, x, sequence_length=encoder_sequence_length, dtype=tf.float32)
-		encoder_final_states = tf.concat(output_states, 2) # dimension: [batch_size x max_sentence_length x encoder_hidden_size * 2]
-
-		decoder_cell = tf.contrib.rnn.LSTMCell(self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-
-		#decoder_sequence_length = 
-		outputs, state = tf.nn.dynamic_rnn(decoder_cell, y, sequence_length=decoder_sequence_length, initial_state=encoder_final_states)
-
-		W = tf.get_variable("W", shape=[None, self.config.decoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
-		b = tf.get_variable("b", shape=[None, self.config.max_sentence_len, self.config.vocab_size], initializer=tf.constant_initializer(0.0))
-
-		preds = tf.matmul(outputs, W) + b
-
-		return preds
-'''
