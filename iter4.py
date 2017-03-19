@@ -130,17 +130,24 @@ class RNN(object):
 		input_sequence_lengths = self.sequence_placeholder # [batch_size] tensor of the lengths of each input sentence in the batch
 		x = self.add_embedding(self.encoder_inputs_placeholder) # [batch_sz, max_sentence_len, embed_sz]
 
+	#	fw_cell2 = tf.nn.rnn_cell.LSTMCell(num_units=.5 * self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+	#	bckwd_cell2 = tf.nn.rnn_cell.LSTMCell(num_units=.5 * self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+
 		fw_cell = tf.contrib.rnn.LSTMCell(.5 * self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 		bckwd_cell = tf.contrib.rnn.LSTMCell(.5 * self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-		print(x)
 
 		outputs, final_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, cell_bw=bckwd_cell, \
-			inputs=x, sequence_length=input_sequence_lengths, dtype=tf.float32)
+			inputs=x, sequence_length=input_sequence_lengths, dtype=tf.float64)
+
+	#	outputs_fw, outputs_bw = outputs
+	#	outputs_fw = tf.cast(outputs_fw, tf.float32)
+	#	outputs_bw = tf.cast(outputs_bw, tf.float32)
+
 		concat_outputs = tf.concat(outputs, 2) # dimension: [batch_size x max_sentence_length x encoder_hidden_size]
 
 		final_state_fw, final_state_bw = final_state
 
-		final_state = tf.concat([final_state_fw[1], final_state_bw[1]], 1)
+	#	final_state = tf.concat([final_state_fw[1], final_state_bw[1]], 1)
 
 		return concat_outputs, final_state # concat_outputs -> attention_values, sequence_length -> attention_values_length
 		# concat_outputs: [batch_size, max_sentence_len, output_size (encoder_hidden_size)]
@@ -154,18 +161,27 @@ class RNN(object):
 
 		cur_hidden_state = None
 		cur_inputs = None
-		for i in xrange(self.config.max_sequence_length + 1): # max_sequence_length iterations + 1 (+1 for start symbol). starts at 0
+		for i in xrange(self.config.max_sentence_len + 1): # max_sequence_length iterations + 1 (+1 for start symbol). starts at 0
 
 			if (i==0): 
 				cur_hidden_state = decoder_start_state   # shape: [batch_size, decoder_hidden_size]
-				start_symbol_tensor = tf.constant(value=SOS_ID, dtype=int32, shape=[self.config.batch_size])
+				start_symbol_tensor = tf.constant(value=SOS_ID, dtype=tf.int32, shape=[self.config.batch_size])
 				cur_inputs = self.add_embedding(start_symbol_tensor) # TODO: fairly unsure whether or not this will work. will just try
 			else:
 				# cur_hidden_state initialized previously at end of for loop
 				cur_inputs = input_embeddings[:, i-1, :] # desired shape: [batch_size, embed_size]. unsure whether or not this will work (might return as numpy array?)
 
-			lstmCell = tf.nn.rnn_cell.LSTMCell(num_units=self.config.decoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
-			intermediate_hidden_state = lstmCell(cur_inputs, cur_hidden_state) # LSTM output has shape: [batch_size, decoder_hidden_size]
+			intermediate_hidden_state = None
+			if (i==0): # state_is_tuple is true for first cell bc end of encoder function outputs final state in weird ass format
+
+				lstmCell = tf.contrib.rnn.LSTMCell(num_units=self.config.decoder_hidden_size, \
+					initializer=tf.contrib.layers.xavier_initializer(), state_is_tuple=True)
+				intermediate_hidden_state, _ = lstmCell(cur_inputs, cur_hidden_state) # LSTM output has shape: [batch_size, decoder_hidden_size]
+
+			else:
+				lstmCell = tf.contrib.rnn.LSTMCell(num_units=self.config.decoder_hidden_size, \
+					initializer=tf.contrib.layers.xavier_initializer(), state_is_tuple=False)
+				intermediate_hidden_state, _ = lstmCell(cur_inputs, cur_hidden_state) # LSTM output has shape: [batch_size, decoder_hidden_size]
 
 			if (i==0):
 				# layer_inputs = intermediate_hidden_state
@@ -184,6 +200,7 @@ class RNN(object):
 				preds.append(cur_pred)
 
 			cur_hidden_state = next_hidden_state
+			print("made it through first iteration of for loop")
 
 		preds_tensor_form = tf.stack(preds, axis=1) # axis = 1 so that max_sentence_len will be second dimension
 
