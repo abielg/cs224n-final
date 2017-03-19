@@ -114,27 +114,28 @@ class RNN(object):
 
 	# Handles a single batch, returns the outputs
 	def add_pred_single_batch_train(self):
-		x = self.add_embedding(self.encoder_inputs_placeholder) # [batch_sz, max_sentence_len, embed_sz]
-		y = self.add_embedding(self.labels_placeholder) # truth embeddings. [batch_size x max_sentence_length x embed_size]
+
 		input_sequence_lengths = self.sequence_placeholder
-		encoder_outputs, final_enc_state = self.encode(x) # TODO: gather sequence lengths
-		preds = self.decode_train(y, encoder_outputs, final_enc_state)
+		encoder_outputs, final_enc_state = self.encode() # TODO: gather sequence lengths
+		preds = self.decode_train(encoder_outputs, final_enc_state)
 
 		return preds # [batch_size, max_sentence_len, vocab_size]
 
-	def encode(self, inputs):
+	def encode(self):
 
 		#inputs: [batch_size x max_sentence_length x embed_size]
 		#sequence_length: [batch_size] vector containing actual length for each sequence
 
 		# encoder_hidden_size is considered the size of the concatenation of the forward and backward cells
 		input_sequence_lengths = self.sequence_placeholder # [batch_size] tensor of the lengths of each input sentence in the batch
-		x = self.encoder_inputs_placeholder
+		x = self.add_embedding(self.encoder_inputs_placeholder) # [batch_sz, max_sentence_len, embed_sz]
 
 		fw_cell = tf.contrib.rnn.LSTMCell(.5 * self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
 		bckwd_cell = tf.contrib.rnn.LSTMCell(.5 * self.config.encoder_hidden_size, initializer=tf.contrib.layers.xavier_initializer())
+		print(x)
 
-		outputs, final_state = tf.nn.bidirectional_dynamic_rnn(fw_cell, bckwd_cell, x, sequence_length=input_sequence_lengths, dtype=tf.float32)
+		outputs, final_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, cell_bw=bckwd_cell, \
+			inputs=x, sequence_length=input_sequence_lengths, dtype=tf.float32)
 		concat_outputs = tf.concat(outputs, 2) # dimension: [batch_size x max_sentence_length x encoder_hidden_size]
 
 		final_state_fw, final_state_bw = final_state
@@ -145,7 +146,9 @@ class RNN(object):
 		# concat_outputs: [batch_size, max_sentence_len, output_size (encoder_hidden_size)]
 
 
-	def decode_train(self, input_embeddings, attention_values, decoder_start_state):
+	def decode_train(self, attention_values, decoder_start_state):
+
+		input_embeddings = self.add_embedding(self.labels_placeholder) # truth embeddings. [batch_size x max_sentence_length x embed_size]
 
 		preds = [] # currently saved as a list, where each elem represents one timestep. TODO: reshape to tensor, where max_sentence_len is second dimension
 
