@@ -36,7 +36,7 @@ class Config(object):
 	dropout = 0.5
 	embed_size = 100
 	encoder_hidden_size = 200
-	decoder_hidden_size = encoder_hidden_size * 2
+	decoder_hidden_size = encoder_hidden_size
 	batch_size = 50 # batch size was previously 2048
 	n_epochs = 10
 	lr = 0.001
@@ -161,52 +161,58 @@ class RNN(object):
 
 		cur_hidden_state = None
 		cur_inputs = None
-		for i in xrange(self.config.max_sentence_len + 1): # max_sequence_length iterations + 1 (+1 for start symbol). starts at 0
 
-			if (i==0): 
-				cur_hidden_state = decoder_start_state   # shape: [batch_size, decoder_hidden_size]
-				start_symbol_tensor = tf.constant(value=SOS_ID, dtype=tf.int32, shape=[self.config.batch_size])
-				cur_inputs = self.add_embedding(start_symbol_tensor) # TODO: fairly unsure whether or not this will work. will just try
-			else:
-				# cur_hidden_state initialized previously at end of for loop
-				cur_inputs = input_embeddings[:, i-1, :] # desired shape: [batch_size, embed_size]. unsure whether or not this will work (might return as numpy array?)
+		with tf.variable_scope("lstm") as scope:
 
-			intermediate_hidden_state = None
-			if (i==0): # state_is_tuple is true for first cell bc end of encoder function outputs final state in weird ass format
-				print(cur_hidden_state)
-				lstmCell = tf.contrib.rnn.LSTMCell(num_units=self.config.decoder_hidden_size, \
-					initializer=tf.contrib.layers.xavier_initializer(), state_is_tuple=False)
-				intermediate_hidden_state, _ = lstmCell(cur_inputs, cur_hidden_state) # LSTM output has shape: [batch_size, decoder_hidden_size]
+			for i in xrange(self.config.max_sentence_len + 1): # max_sequence_length iterations + 1 (+1 for start symbol). starts at 0
+				if i > 0:
+					scope.reuse_variables()
 
-			else:
-				lstmCell = tf.contrib.rnn.LSTMCell(num_units=self.config.decoder_hidden_size, \
-					initializer=tf.contrib.layers.xavier_initializer(), state_is_tuple=False)
-				intermediate_hidden_state, _ = lstmCell(cur_inputs, cur_hidden_state) # LSTM output has shape: [batch_size, decoder_hidden_size]
+				if (i==0): 
+					cur_hidden_state = decoder_start_state   # shape: [batch_size, decoder_hidden_size]
+					start_symbol_tensor = tf.constant(value=SOS_ID, dtype=tf.int32, shape=[self.config.batch_size])
+					cur_inputs = self.add_embedding(start_symbol_tensor) # TODO: fairly unsure whether or not this will work. will just try
+				else:
+					# cur_hidden_state initialized previously at end of for loop
+				#	cur_inputs = input_embeddings[:, i-1, :] # desired shape: [batch_size, embed_size]. unsure whether or not this will work (might return as numpy array?)
+					cur_inputs = tf.slice(input_embeddings, [0, i-1, 0], [-1, 1, -1])
 
-			if (i==0):
-				# layer_inputs = intermediate_hidden_state
-				next_hidden_state = intermediate_hidden_state
-			else:
-				attn_scores, context_vector = attention_function_simple(intermediate_hidden_state, attention_values, sequence_length)
-				
-				layer_inputs = tf.concat([intermediate_hidden_state, context_vector], 1) # size: [batch_size, 2 * decoder_hidden_size]
-				next_hidden_state = tf.contrib.layers.fully_connected(inputs=layer_inputs, \
-					num_outputs=self.config.decoder_hidden_size, activation_fn=tf.nn.tanh, trainable=True)  # should be trainable as is
+				intermediate_hidden_state = None
+				if (i==0): # state_is_tuple is true for first cell bc end of encoder function outputs final state in weird ass format
+	
+					lstmCell = tf.contrib.rnn.LSTMCell(num_units=self.config.decoder_hidden_size, \
+						initializer=tf.contrib.layers.xavier_initializer(), state_is_tuple=False)
+					intermediate_hidden_state, _ = lstmCell(cur_inputs, cur_hidden_state) # LSTM output has shape: [batch_size, decoder_hidden_size]
 
-				W_out = tf.get_variable("W_out", shape=[self.config.decoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
-				b_out = tf.get_variable("b_out", shape=[self.config.vocab_size], initializer=tf.constant_initializer(0.0))
+				else:
+					lstmCell = tf.contrib.rnn.LSTMCell(num_units=self.config.decoder_hidden_size, \
+						initializer=tf.contrib.layers.xavier_initializer(), state_is_tuple=False)
+					intermediate_hidden_state, _ = lstmCell(cur_inputs, cur_hidden_state) # LSTM output has shape: [batch_size, decoder_hidden_size]
 
-				cur_pred = tf.matmul(cur_hidden_state, W_out) + b_out
-				preds.append(cur_pred)
+				if (i==0):
+					# layer_inputs = intermediate_hidden_state
+					next_hidden_state = intermediate_hidden_state
+				else:
+					attn_scores, context_vector = self.attention_function_simple(intermediate_hidden_state, attention_values, self.sequence_placeholder)
+					
+					layer_inputs = tf.concat([intermediate_hidden_state, context_vector], 1) # size: [batch_size, 2 * decoder_hidden_size]
+					next_hidden_state = tf.contrib.layers.fully_connected(inputs=layer_inputs, \
+						num_outputs=self.config.decoder_hidden_size, activation_fn=tf.nn.tanh, trainable=True)  # should be trainable as is
 
-			cur_hidden_state = next_hidden_state
-			print("made it through first iteration of for loop")
+					W_out = tf.get_variable("W_out", shape=[self.config.decoder_hidden_size, self.config.vocab_size], initializer=tf.contrib.layers.xavier_initializer())
+					b_out = tf.get_variable("b_out", shape=[self.config.vocab_size], initializer=tf.constant_initializer(0.0))
+
+					cur_pred = tf.matmul(cur_hidden_state, W_out) + b_out
+					preds.append(cur_pred)
+
+				cur_hidden_state = next_hidden_state
+				print("made it through first iteration of for loop")
 
 		preds_tensor_form = tf.stack(preds, axis=1) # axis = 1 so that max_sentence_len will be second dimension
 
 		return preds_tensor_form # TODO: EOS token? or output one pad token -> fill the rest with pad?
 
-	def attention_function_simple(cell_output, attention_values, sequence_length): # h{enc_i} dot h{s} ... h{s} represents previous hidden state of decoder
+	def attention_function_simple(self, cell_output, attention_values, sequence_length): # h{enc_i} dot h{s} ... h{s} represents previous hidden state of decoder
 
 		# cell_output: [batch_size, decoder_hidden_size] (same dimension as concat_outputs) # h(t-1) of decoder
 		# attention_values: [batch_size, max_sentence_len, encoder_hidden_size] ... okay bc we're using global attention
@@ -218,9 +224,9 @@ class RNN(object):
 	#	print(first_dot.get_shape)
 
 		# global attention. using bilinear formula: ht dot W dot cell_output
-		raw_scores = tf.reduce_sum(attention_values * tf.expand_dims(cell_output), [2]) # [batch_sz, max_sentence_len]
-		scores_mask = tf.sequence_mask(lenghts=tf.to_int32(sequence_length), max_len=self.config.max_sentence_len, dtype=tf.float32)
-		attn_scores = raw_scores * scores_mask + ((1.0 - scores_mask) * tf.float32.min) # unsure what exactly this does ... seems to be a typecast
+		raw_scores = tf.reduce_sum(attention_values * tf.expand_dims(cell_output, 1), [2]) # [batch_sz, max_sentence_len]
+		scores_mask = tf.sequence_mask(lengths=tf.to_int32(sequence_length), maxlen=self.config.max_sentence_len, dtype=tf.float64)
+		attn_scores = raw_scores * scores_mask + ((1.0 - scores_mask) * tf.float64.min) # unsure what exactly this does ... seems to be a typecast
 		prob_distribution = tf.nn.softmax(attn_scores) # [batch_sz, max_sentence_len]
 		context_vector = tf.expand_dims(prob_distribution, 2) * attention_values # multiplies each hidden encoder vector by its attention score
 		# context_vectors shape: [batch_sz, max_sentence_len, dec_hidden_size]
